@@ -3,6 +3,7 @@
   "references": [
     { "path": "packages/shared" },
     { "path": "packages/games/diwan" },
+    { "path": "packages/games/tap-race" },
     { "path": "apps/server" },
     { "path": "apps/web" }
   ]

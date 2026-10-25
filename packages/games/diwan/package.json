@@ -15,6 +15,7 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@partybox/shared": "workspace:*"
+    "@partybox/shared": "workspace:*",
+    "zod": "^3.23.8"
   }
 }

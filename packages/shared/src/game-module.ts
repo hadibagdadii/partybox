@@ -1,8 +1,24 @@
+import type { z } from 'zod';
 import type { Rng } from './rng.js';
 
-export interface ReduceResult<State, Event> {
-  state: State;
-  events: Event[];
+/** A seated player as the room hands it to a game. */
+export interface SeatInfo {
+  id: string;
+  name: string;
+}
+
+export interface GameError {
+  code: 'wrong_phase' | 'not_your_turn' | 'invalid_action';
+  message: string;
+}
+
+export type ReduceResult<State, Event> =
+  { ok: true; state: State; events: Event[] } | { ok: false; error: GameError };
+
+/** An action plus the seat that sent it. The room fills in `playerId`, never the client. */
+export interface PlayerAction<Action> {
+  playerId: string;
+  action: Action;
 }
 
 /**
@@ -11,12 +27,21 @@ export interface ReduceResult<State, Event> {
  */
 export interface GameModule<State, Action, Event, HostView, PlayerView> {
   id: string;
+  /** Neutral fallback name; games with a theme show their themed title in their own screens. */
+  displayName: string;
   minPlayers: number;
   maxPlayers: number;
-  setup(playerIds: readonly string[], rng: Rng): State;
-  reduce(state: State, action: Action, rng: Rng): ReduceResult<State, Event>;
+  /** Validates untrusted action payloads before they reach `reduce`. */
+  actionSchema: z.ZodType<Action, z.ZodTypeDef, unknown>;
+  createInitialState(players: readonly SeatInfo[], rng: Rng): State;
+  /** Rejects wrong-phase or wrong-player actions with a typed error, never by throwing. */
+  reduce(state: State, action: PlayerAction<Action>, rng: Rng): ReduceResult<State, Event>;
   /** Public information only: never roles, deck order, or hands. */
   getHostView(state: State): HostView;
   /** Host view plus only what this player is allowed to know. */
   getPlayerView(state: State, playerId: string): PlayerView;
+  isOver(state: State): boolean;
 }
+
+/** A game module with its types erased, as the room system holds it. */
+export type AnyGameModule = GameModule<unknown, unknown, unknown, unknown, unknown>;

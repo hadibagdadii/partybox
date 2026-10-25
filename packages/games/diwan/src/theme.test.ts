@@ -25,7 +25,10 @@ describe('theme', () => {
 
 describe('diwanModule stub', () => {
   it('host view exposes only public info', () => {
-    const state = diwanModule.setup(['a', 'b', 'c', 'd', 'e'], createRng(1));
+    const state = diwanModule.createInitialState(
+      ['a', 'b', 'c', 'd', 'e'].map((id) => ({ id, name: id })),
+      createRng(1),
+    );
     expect(diwanModule.getHostView(state)).toEqual({ playerCount: 5 });
   });
 });

@@ -1,4 +1,5 @@
 import type { GameModule } from '@partybox/shared';
+import { z } from 'zod';
 
 export * from './ids.js';
 export { theme } from './theme.js';
@@ -24,10 +25,13 @@ export const diwanModule: GameModule<
   DiwanPlayerView
 > = {
   id: 'diwan',
+  displayName: 'Diwan',
   minPlayers: 5,
   maxPlayers: 10,
-  setup: (playerIds) => ({ playerIds: [...playerIds] }),
-  reduce: (state) => ({ state, events: [] }),
+  actionSchema: z.never(),
+  createInitialState: (players) => ({ playerIds: players.map((p) => p.id) }),
+  reduce: (state) => ({ ok: true, state, events: [] }),
   getHostView: (state) => ({ playerCount: state.playerIds.length }),
   getPlayerView: (state, playerId) => ({ playerCount: state.playerIds.length, playerId }),
+  isOver: () => false,
 };
