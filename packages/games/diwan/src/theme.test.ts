@@ -32,6 +32,21 @@ describe('theme', () => {
     expect(theme.log.powerUsed('Amina', theme.powers.policyPeek, null)).toMatch(/\.$/);
   });
 
+  it('has TV copy for every phase and power', () => {
+    const { instruction } = theme.tv;
+    expect(instruction.nominate('Amina')).toContain('Amina');
+    expect(instruction.vote('Amina', 'Yusuf')).toContain('Yusuf');
+    for (const id of POWER_IDS) expect(instruction.power[id]('Amina')).toContain('Amina');
+    expect(theme.tv.voteTally(true, 4, 3)).toContain('4');
+  });
+
+  it('keeps the herald vote line to the result and tally', () => {
+    const { herald } = theme;
+    const line = herald.vote(true, herald.numbers[4]!, herald.numbers[3]!);
+    expect(line).toBe('The vote passes, four to three.');
+    expect(herald.numbers).toHaveLength(11);
+  });
+
   it('credits the original authors', () => {
     expect(theme.attribution).toContain('Secret Hitler');
     expect(theme.attribution).toContain('CC BY-NC-SA 4.0');

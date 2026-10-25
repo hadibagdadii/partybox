@@ -1,15 +1,19 @@
 import type { LobbyView, PlayerViewMessage } from '@partybox/shared';
 import type { ComponentType } from 'react';
 import { DiwanDebugPlayer } from './diwan/DiwanDebugPlayer';
-import { DiwanHost } from './diwan/DiwanHost';
+import { DiwanDebugHost } from './diwan/DiwanDebugHost';
 import { DiwanLobby } from './diwan/phone/screens/DiwanLobby';
 import { DiwanPhone } from './diwan/phone/DiwanPhone';
+import { DiwanTv } from './diwan/tv/DiwanTv';
+import { HeraldLobbyExtras } from './diwan/tv/HeraldSettings';
 import { TapRaceHost, TapRacePlayer } from './tap-race/TapRace';
 
 export interface HostScreenProps {
   room: LobbyView;
   /** The game's host projection; each screen knows its own shape. */
   game: unknown;
+  /** Abandons this room and starts over; for screens that own the whole viewport. */
+  newRoom?: () => void;
 }
 
 export interface PlayerScreenProps {
@@ -34,6 +38,12 @@ export interface LobbyScreenProps {
 
 export interface GameScreens {
   Host: ComponentType<HostScreenProps>;
+  /** Plain-text TV screen, shown in dev with ?debug=1 on /host. */
+  HostDebug?: ComponentType<HostScreenProps>;
+  /** The Host screen owns the whole viewport: no generic header, waiting list, or buttons. */
+  hostFullScreen?: boolean;
+  /** Extra controls on the generic host lobby (e.g. enabling narration). */
+  HostLobbyExtras?: ComponentType;
   Player: ComponentType<PlayerScreenProps>;
   /** Plain-text phone screen, shown in dev with ?debug=1. */
   Debug?: ComponentType<PlayerScreenProps>;
@@ -45,7 +55,10 @@ export interface GameScreens {
 
 export const gameScreens: Record<string, GameScreens> = {
   diwan: {
-    Host: DiwanHost,
+    Host: DiwanTv,
+    HostDebug: DiwanDebugHost,
+    hostFullScreen: true,
+    HostLobbyExtras: HeraldLobbyExtras,
     Player: DiwanPhone,
     Debug: DiwanDebugPlayer,
     Lobby: DiwanLobby,

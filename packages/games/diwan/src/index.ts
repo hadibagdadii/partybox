@@ -16,6 +16,7 @@ export {
   LOYAL_DECREES_TO_WIN,
   REBEL_DECREES_TO_WIN,
   UNREST_LIMIT,
+  VETO_UNLOCK,
   powerTrack,
   teamOf,
 } from './rules.js';

@@ -24,6 +24,10 @@ export const colors = {
   /** Rebel Decree: dark crimson field, indigo trim. */
   rebel: '#5a1622',
   rebelInk: '#f4d3c4',
+  /** Record and badge accents: each event kind gets its own hue. */
+  riot: '#f08a3c',
+  power: '#8fb3ff',
+  exile: '#e0656a',
   seal: '#9b2226',
   sealDark: '#6a1418',
 } as const;
@@ -59,4 +63,16 @@ export const motion = {
   slow: '600ms',
 } as const;
 
-export const tokens = { colors, fonts, radii, spacing, shadows, motion } as const;
+/**
+ * TV type scale, in px on the 1920×1080 stage. The stage scales as a whole, so
+ * these are "px at 1080p"; nothing on the TV goes below `sm`.
+ */
+export const tvType = {
+  sm: '32px',
+  md: '40px',
+  lg: '56px',
+  xl: '80px',
+  '2xl': '120px',
+} as const;
+
+export const tokens = { colors, fonts, radii, spacing, shadows, motion, tvType } as const;

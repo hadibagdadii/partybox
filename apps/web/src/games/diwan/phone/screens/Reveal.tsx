@@ -1,6 +1,6 @@
 import { theme } from '@partybox/diwan';
 import { HoldToReveal } from '../HoldToReveal';
-import { Rosette12, Scroll, WaxSeal } from '../ornaments';
+import { Rosette12, Scroll, WaxSeal } from '../../ornaments';
 import { RoleDetails } from '../RoleDetails';
 import { actionsOf, type ScreenProps } from '../screen';
 import { Button, Frame, Title } from '../ui';

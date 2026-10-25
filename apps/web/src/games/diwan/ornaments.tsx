@@ -1,5 +1,5 @@
 import { useId, type ReactNode } from 'react';
-import { colors } from '../tokens';
+import { colors } from './tokens';
 
 /** Points of an n-pointed star polygon centered on (cx, cy). */
 export function starPoints(n: number, outer: number, inner: number, cx = 0, cy = 0): string {
@@ -182,6 +182,119 @@ export function CrossedBlades({
     <svg viewBox="-32 -32 64 64" width={size} height={size} className={className} aria-hidden>
       <g transform="rotate(-38)">{blade}</g>
       <g transform="rotate(38) scale(-1 1)">{blade}</g>
+    </svg>
+  );
+}
+
+/** Crescent moon; the night scene and the Wazir seal. */
+export function Crescent({
+  size = 40,
+  color = 'currentColor',
+  className,
+}: {
+  size?: number;
+  color?: string;
+  className?: string;
+}) {
+  return (
+    <svg viewBox="-20 -20 40 40" width={size} height={size} className={className} aria-hidden>
+      <path d="M6 -16 A16 16 0 1 0 6 16 A20 20 0 0 1 6 -16 Z" fill={color} />
+    </svg>
+  );
+}
+
+/**
+ * Office seal: scalloped disc with the Ameer's star or the Wazir's crescent,
+ * so the two offices differ by shape as well as color.
+ */
+export function OfficeSeal({
+  office,
+  size = 48,
+  className,
+}: {
+  office: 'ameer' | 'wazir';
+  size?: number;
+  className?: string;
+}) {
+  const ameer = office === 'ameer';
+  const field = ameer ? colors.gold : colors.emeraldLight;
+  const rim = ameer ? colors.goldDark : colors.emerald;
+  return (
+    <svg viewBox="-50 -50 100 100" width={size} height={size} className={className} aria-hidden>
+      <polygon points={starPoints(16, 48, 42)} fill={field} stroke={rim} strokeWidth={3} />
+      <circle r={34} fill="none" stroke={rim} strokeWidth={3} />
+      {ameer ? (
+        <polygon points={starPoints(8, 24, 24 * 0.7654)} fill={colors.ink} />
+      ) : (
+        <path d="M8 -24 A24 24 0 1 0 8 24 A30 30 0 0 1 8 -24 Z" fill={colors.ink} />
+      )}
+    </svg>
+  );
+}
+
+/** Small record and badge glyphs. Geometric only: no figures. */
+export function Glyph({
+  name,
+  size = 24,
+  color = 'currentColor',
+  className,
+}: {
+  name:
+    | 'check'
+    | 'cross'
+    | 'burst'
+    | 'key'
+    | 'brokenSeal'
+    | 'shuffle'
+    | 'scales'
+    | 'flag'
+    | 'arrow'
+    | 'ban';
+  size?: number;
+  color?: string;
+  className?: string;
+}) {
+  const stroke = { fill: 'none', stroke: color, strokeWidth: 3, strokeLinecap: 'round' as const };
+  const shape = {
+    check: <path d="M-8 1 L-2 7 L9 -7" {...stroke} />,
+    cross: <path d="M-7 -7 L7 7 M7 -7 L-7 7" {...stroke} />,
+    burst: <polygon points={starPoints(10, 11, 4.5)} fill={color} />,
+    key: (
+      <g {...stroke} strokeWidth={2.5}>
+        <circle cx={-5} cy={-5} r={4.5} />
+        <path d="M-1.8 -1.8 L9 9 M5 5 L8 2 M7.5 7.5 L10 5" />
+      </g>
+    ),
+    brokenSeal: (
+      <g>
+        <path d="M-1 -11 A11 11 0 0 0 -2 11 L1 4 L-3 0 L2 -5 Z" fill={color} />
+        <path d="M3 -11 A11 11 0 0 1 4 11 L6 5 L2 1 L6 -5 Z" fill={color} />
+      </g>
+    ),
+    shuffle: (
+      <path
+        d="M-10 -5 H-3 L4 5 H10 M-10 5 H-3 L4 -5 H10 M7 -8 L10 -5 L7 -2 M7 2 L10 5 L7 8"
+        {...stroke}
+        strokeWidth={2.2}
+      />
+    ),
+    scales: (
+      <g {...stroke} strokeWidth={2.2}>
+        <path d="M0 -10 V10 M-6 10 H6 M-9 -6 H9 M-9 -6 L-12 2 H-6 Z M9 -6 L6 2 H12 Z" />
+      </g>
+    ),
+    flag: <path d="M-7 10 V-10 M-7 -9 H8 L4 -4 L8 1 H-7" {...stroke} strokeWidth={2.4} />,
+    arrow: <path d="M-9 0 H8 M3 -5 L8 0 L3 5" {...stroke} />,
+    ban: (
+      <g {...stroke} strokeWidth={2.4}>
+        <circle r={9} />
+        <path d="M-6 -6 L6 6" />
+      </g>
+    ),
+  }[name];
+  return (
+    <svg viewBox="-12 -12 24 24" width={size} height={size} className={className} aria-hidden>
+      {shape}
     </svg>
   );
 }

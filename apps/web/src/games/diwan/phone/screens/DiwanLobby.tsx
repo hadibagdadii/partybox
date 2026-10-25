@@ -1,6 +1,6 @@
 import { theme } from '@partybox/diwan';
 import type { LobbyScreenProps } from '../../../registry';
-import { LatticeBackground, Rosette12, Star8 } from '../ornaments';
+import { LatticeBackground, Rosette12, Star8 } from '../../ornaments';
 import { Button, Frame, Title } from '../ui';
 
 /** Themed waiting room. The VIP gets Start once the server says the room can start. */

@@ -162,6 +162,95 @@ export const theme = {
     exiled: (target: string) => `${target} has been exiled.`,
     gameOver: (team: string, reason: string) => `The ${team} win. ${reason}.`,
   },
+  /** TV (host screen) copy. Templates take names that are already looked up. */
+  tv: {
+    instruction: {
+      reveal: () => 'Read your scroll in secret',
+      nominate: (ameer: string) => `${ameer}, choose your ${offices.wazir}`,
+      vote: (ameer: string, wazir: string) => `Should ${ameer} and ${wazir} govern? Vote now`,
+      ameerDiscard: (ameer: string) => `${ameer} reviews three decrees`,
+      wazirEnact: (wazir: string) => `${wazir} chooses a decree to enact`,
+      vetoPending: (ameer: string, wazir: string) =>
+        `${wazir} proposes a ${veto}. ${ameer} decides`,
+      power: {
+        investigate: (ameer: string) => `${ameer}, choose a courtier to spy on`,
+        specialElection: (ameer: string) => `${ameer}, name the next ${offices.ameer}`,
+        policyPeek: (ameer: string) => `${ameer} reads the next three decrees`,
+        execution: (ameer: string) => `${ameer}, choose a courtier to exile`,
+      } satisfies Record<PowerId, (ameer: string) => string>,
+    },
+    loyalTrack: 'Loyal Decrees',
+    rebelTrack: 'Rebel Decrees',
+    draw: 'Draw',
+    discard: 'Discard',
+    vetoSlot: veto,
+    vetoUnlocked: `${veto} unlocked`,
+    winSlot: 'Victory',
+    waitingOn: 'Waiting on',
+    away: 'away',
+    exiled: 'exiled',
+    termLimit: 'last term',
+    courtRecord: 'Court record',
+    voteTally: (passed: boolean, yes: number, no: number) =>
+      `${passed ? 'Passed' : 'Failed'} ${yes}–${no}`,
+    riotTag: chaos,
+    exileBanner: (target: string) => `${target} is exiled`,
+    nightTitle: 'Night falls on the court',
+    nightHint: 'Look at your scroll in secret, and remember who you can trust.',
+    gameOverTitle: (team: string) => `The ${team} prevail`,
+    rolesTitle: 'Every allegiance',
+    settings: 'Settings',
+    heraldEnable: 'Enable the herald',
+    heraldReady: 'The herald is ready',
+    heraldMute: 'Mute the herald',
+    heraldVoice: 'Herald voice',
+    heraldDefaultVoice: 'Default voice',
+    newRoom: 'New room',
+  },
+  /** Court record: short, round-grouped summaries shared by the TV log and the phone. */
+  record: {
+    round: (n: number) => `Round ${n}`,
+    nominated: (ameer: string, wazir: string) => `${offices.ameer} ${ameer} nominated ${wazir}`,
+    vote: (passed: boolean, yes: number, no: number) =>
+      `${passed ? 'Passed' : 'Failed'} ${yes}-${no}`,
+    unrest: (level: number, limit: number) => `${electionTracker} ${level}/${limit}`,
+    riot: (decree: string) => `${chaos}: ${decree} enacted`,
+    enacted: (decree: string) => `${decree} enacted`,
+    reshuffled: (count: number) => `Deck reshuffled (${count})`,
+    vetoProposed: (wazir: string) => `${wazir} proposed a ${veto}`,
+    vetoAnswered: (ameer: string, accept: boolean) =>
+      `${ameer} ${accept ? 'accepted' : 'refused'} the ${veto}`,
+    power: (power: string, target: string | null) => (target ? `${power}: ${target}` : power),
+    exiled: (target: string) => `${target} exiled`,
+    gameOver: (team: string) => `The ${team} win`,
+  },
+  /** Spoken by the court herald. Short, public, and never more than the log says. */
+  herald: {
+    night: 'The court falls silent. Look at your scroll, and remember who you can trust.',
+    nominated: (ameer: string, wazir: string) => `${ameer} names ${wazir} as ${offices.wazir}.`,
+    /** Result and tally only; names stay on screen. */
+    vote: (passed: boolean, yes: string, no: string) =>
+      `The vote ${passed ? 'passes' : 'fails'}, ${yes} to ${no}.`,
+    numbers: [
+      'none',
+      'one',
+      'two',
+      'three',
+      'four',
+      'five',
+      'six',
+      'seven',
+      'eight',
+      'nine',
+      'ten',
+    ],
+    riot: (decree: string) => `${chaos}! The people rise, and a ${decree} is enacted.`,
+    enacted: (decree: string) => `A ${decree} is enacted.`,
+    powerUsed: (ameer: string, power: string, target: string | null) =>
+      target ? `${ameer} uses ${power} on ${target}.` : `${ameer} uses ${power}.`,
+    exiled: (target: string) => `${target} is exiled from the court.`,
+    gameOver: (team: string, reason: string) => `The ${team} prevail. ${reason}.`,
+  },
   attribution:
     'Diwan is adapted from Secret Hitler by Max Temkin, Mike Boxleiter, Tommy Maranges, and Mackenzie Schubert, used under CC BY-NC-SA 4.0. Diwan is free and shared under the same license.',
 } as const;

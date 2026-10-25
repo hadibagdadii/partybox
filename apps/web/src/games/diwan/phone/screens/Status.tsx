@@ -1,7 +1,9 @@
 import { teamOf, theme } from '@partybox/diwan';
 import { listNames } from '../../format';
-import { Rosette12, Star8 } from '../ornaments';
-import { CourtStatus, LogList, TeamMark } from '../RoleDetails';
+import { Rosette12, Star8 } from '../../ornaments';
+import { CourtRecord } from '../../ui/CourtRecord';
+import { TeamMark } from '../../ui/TeamMark';
+import { CourtStatus } from '../RoleDetails';
 import type { ScreenProps } from '../screen';
 import { Button, Frame, Title } from '../ui';
 
@@ -46,7 +48,7 @@ export function ExiledScreen({ view, name }: ScreenProps) {
       <CourtStatus view={view} />
       <section className="flex flex-col gap-2">
         <h2 className="font-display text-2xl text-court-goldLight">{theme.phone.courtRecord}</h2>
-        <LogList view={view} name={name} />
+        <CourtRecord log={view.log} name={name} />
       </section>
     </Frame>
   );

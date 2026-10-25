@@ -71,3 +71,16 @@ export const seenSecrets = {
   },
   set: (seatKey: string, count: number) => write(`${seatKey}:seen`, String(count)),
 };
+
+/** The TV herald's mute switch and chosen voice. */
+export const heraldPrefs = {
+  get(): { muted: boolean; voiceURI: string | null } {
+    return {
+      muted: read('partybox:herald:muted') === '1',
+      voiceURI: read('partybox:herald:voice'),
+    };
+  },
+  setMuted: (muted: boolean) => write('partybox:herald:muted', muted ? '1' : '0'),
+  setVoice: (uri: string | null) =>
+    uri ? write('partybox:herald:voice', uri) : remove('partybox:herald:voice'),
+};

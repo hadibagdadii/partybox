@@ -13,6 +13,12 @@ const port = Number(process.env.PORT ?? 3000);
 const here = path.dirname(fileURLToPath(import.meta.url));
 const webDist = process.env.WEB_DIST ?? path.resolve(here, '../../web/dist');
 
+/** Dev only: slow the bots down (e.g. to watch TV moments play out). */
+function envMs(key: string): number | undefined {
+  const n = Number(process.env[key]);
+  return !isProd && Number.isFinite(n) && n >= 0 && process.env[key] ? n : undefined;
+}
+
 // In dev, Vite serves the web app and proxies /healthz and /socket.io here.
 const app = createApp({ webDist: isProd ? webDist : undefined });
 const httpServer = createServer(app);
@@ -23,7 +29,10 @@ const rooms = new RoomService({
   games: createGameRegistry({ devTools: !isProd }),
   defaultGameId: DEFAULT_GAME_ID,
 });
-const sockets = registerSocketHandlers(io, rooms, { devTools: !isProd });
+const sockets = registerSocketHandlers(io, rooms, {
+  devTools: !isProd,
+  bots: { minDelayMs: envMs('BOT_MIN_DELAY_MS'), maxDelayMs: envMs('BOT_MAX_DELAY_MS') },
+});
 
 setInterval(() => {
   const removed = rooms.sweepIdle();

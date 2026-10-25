@@ -8,8 +8,8 @@ import {
 import type { HostScreenProps } from '../registry';
 import { formatLog, nameLookup } from './format';
 
-/** Debug TV screen: public state as plain text. Styled in Phase 4. */
-export function DiwanHost({ game }: HostScreenProps) {
+/** Debug TV screen: public state as plain text, shown in dev with ?debug=1. */
+export function DiwanDebugHost({ game }: HostScreenProps) {
   const view = game as DiwanHostView;
   const name = nameLookup(view.players);
   const track = view.powerTrack.map((p, i) => `${i + 1}:${p ? theme.powers[p] : '-'}`).join('  ');

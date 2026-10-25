@@ -5,8 +5,10 @@ import type { PlayerScreenProps } from '../../registry';
 import { nameLookup, type Names } from '../format';
 import { useHold } from './HoldToReveal';
 import { useSeenSecrets } from './useSeenSecrets';
-import { LatticeBackground, WaxSeal } from './ornaments';
-import { LogList, RoleDetails } from './RoleDetails';
+import { LatticeBackground, WaxSeal } from '../ornaments';
+import { CourtRecord } from '../ui/CourtRecord';
+import { CourtStrip } from './CourtStrip';
+import { RoleDetails } from './RoleDetails';
 import { pickScreen, type ScreenProps } from './screen';
 import { NominateScreen } from './screens/Nominate';
 import { DiscardScreen, EnactScreen, VetoAnswerScreen } from './screens/Legislate';
@@ -51,6 +53,8 @@ export function DiwanPhone({ room, you: seat, game, act, seatKey, reset }: Playe
         </button>
       </header>
 
+      {view.you && <CourtStrip view={view} name={name} onOpen={() => setLogOpen(true)} />}
+
       <div className="relative z-10 flex min-h-0 flex-1 flex-col">
         {!view.you ? null : screen === 'spyResult' && unseenSpy ? (
           <SpyResultScreen secret={unseenSpy} name={name} onDone={markSeen} />
@@ -62,7 +66,7 @@ export function DiwanPhone({ room, you: seat, game, act, seatKey, reset }: Playe
       </div>
 
       <BottomSheet title={theme.phone.courtRecord} open={logOpen} onClose={() => setLogOpen(false)}>
-        <LogList view={view} name={name} />
+        <CourtRecord log={view.log} name={name} />
       </BottomSheet>
     </div>
   );

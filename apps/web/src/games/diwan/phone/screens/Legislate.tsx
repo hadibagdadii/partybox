@@ -1,7 +1,8 @@
 import { theme } from '@partybox/diwan';
 import { useState } from 'react';
 import { actionsOf, type ScreenProps } from '../screen';
-import { Button, DecreeCard, Frame, Title } from '../ui';
+import { DecreeCard } from '../../ui/DecreeCard';
+import { Button, Frame, Title } from '../ui';
 
 /** Ameer: three decrees, pick one to discard, confirm. */
 export function DiscardScreen({ view, act, busy }: ScreenProps) {

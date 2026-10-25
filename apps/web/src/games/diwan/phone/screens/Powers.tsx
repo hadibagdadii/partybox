@@ -1,9 +1,10 @@
 import { theme, type DiwanAction, type Secret } from '@partybox/diwan';
 import { useState } from 'react';
-import { TeamMark } from '../RoleDetails';
-import { Scroll, WaxSeal } from '../ornaments';
+import { TeamMark } from '../../ui/TeamMark';
+import { Scroll, WaxSeal } from '../../ornaments';
 import { actionsOf, type ScreenProps } from '../screen';
-import { Button, ConfirmDialog, DecreeCard, Frame, PlayerCard, Title } from '../ui';
+import { DecreeCard } from '../../ui/DecreeCard';
+import { Button, ConfirmDialog, Frame, PlayerCard, Title } from '../ui';
 
 type TargetAction = Extract<DiwanAction, { type: 'investigate' | 'specialElection' | 'execution' }>;
 

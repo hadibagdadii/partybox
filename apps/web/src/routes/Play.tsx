@@ -6,7 +6,7 @@ import {
 } from '@partybox/shared';
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { LatticeBackground, Rosette12 } from '../games/diwan/phone/ornaments';
+import { LatticeBackground, Rosette12 } from '../games/diwan/ornaments';
 import { gameScreens } from '../games/registry';
 import { getSocket, useConnected, useOnConnect } from '../lib/socket';
 import { parseSlot, playerToken, playerTokenKey } from '../lib/storage';

@@ -1,43 +1,10 @@
 import type { DiwanPlayerView } from '@partybox/diwan';
+import { fixturePlayers, hostView } from '../tv/fixtures';
 
-/** Typed player views for tests and the /dev/diwan gallery; the types catch drift from the engine. */
-export const fixturePlayers = [
-  { id: 'p1', name: 'Amina', alive: true },
-  { id: 'p2', name: 'Yusuf', alive: true },
-  { id: 'p3', name: 'Layla', alive: true },
-  { id: 'p4', name: 'Omar', alive: true },
-  { id: 'p5', name: 'Zainab', alive: true },
-  { id: 'p6', name: 'Idris', alive: true },
-  { id: 'p7', name: 'Noor', alive: true },
-];
-
+/** Typed player views for tests and the /dev/diwan gallery, built on the TV's host fixtures. */
 export function playerView(overrides: Partial<DiwanPlayerView> = {}): DiwanPlayerView {
   return {
-    phase: 'nominate',
-    players: fixturePlayers,
-    acknowledgedIds: [],
-    waitingOn: ['p2'],
-    ameerId: 'p2',
-    nomineeId: null,
-    lastElected: null,
-    eligibleWazirIds: [],
-    powerTargetIds: [],
-    votedIds: [],
-    enacted: { loyal: 1, rebel: 2 },
-    unrest: 1,
-    drawCount: 11,
-    discardCount: 3,
-    vetoUnlocked: false,
-    vetoRefused: false,
-    pendingPower: null,
-    powerTrack: [null, 'investigate', 'specialElection', 'execution', 'execution'],
-    log: [
-      { type: 'nominated', ameerId: 'p6', wazirId: 'p3' },
-      { type: 'votesRevealed', votes: { p1: 'yes', p2: 'no', p3: 'yes' }, passed: true },
-      { type: 'enacted', decree: 'rebel', ameerId: 'p6', wazirId: 'p3' },
-    ],
-    winner: null,
-    roles: null,
+    ...hostView(),
     you: { id: 'p1', role: 'loyal', team: 'loyal', alive: true },
     knownRoles: { p1: 'loyal' },
     hand: null,

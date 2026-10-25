@@ -131,7 +131,10 @@ describe('legal actions', () => {
 
   it('shows no action buttons while waiting', () => {
     renderPhone(scenarios.waiting);
-    const names = screen.getAllByRole('button').map((b) => b.textContent);
+    const names = screen
+      .getAllByRole('button')
+      .filter((b) => b.dataset.testid !== 'court-strip')
+      .map((b) => b.textContent);
     expect(names).toEqual([theme.phone.myRole, theme.phone.courtRecord]);
   });
 
@@ -141,7 +144,9 @@ describe('legal actions', () => {
     const { act } = renderPhone(view);
     for (let pass = 0; pass < 3; pass++) {
       for (const b of screen.queryAllByRole('button')) {
-        if (b.textContent === theme.phone.courtRecord || !b.isConnected) continue;
+        if (b.textContent === theme.phone.courtRecord || b.dataset.testid === 'court-strip')
+          continue;
+        if (!b.isConnected) continue;
         await flush(async () => fireEvent.click(b));
       }
     }
@@ -171,10 +176,37 @@ describe('private results', () => {
     expect(screen.queryByTestId('role-peek')).toBeNull();
   });
 
-  it('opens the court record as plain sentences', () => {
+  it('opens the court record grouped by round', () => {
     renderPhone(scenarios.waiting);
     fireEvent.click(button(theme.phone.courtRecord));
     const sheet = screen.getByRole('dialog', { name: theme.phone.courtRecord });
-    expect(within(sheet).getByText(theme.log.nominated('Idris', 'Layla'))).toBeTruthy();
+    const rounds = within(sheet).getAllByTestId('record-round');
+    expect(rounds).toHaveLength(1);
+    expect(within(rounds[0]!).getByText(theme.record.round(1))).toBeTruthy();
+    expect(within(rounds[0]!).getByText(theme.record.nominated('Idris', 'Layla'))).toBeTruthy();
+    expect(within(rounds[0]!).getByText(theme.record.vote(true, 4, 3))).toBeTruthy();
+  });
+});
+
+describe('court strip', () => {
+  it('shows tracks, unrest, and the government on every in-game screen', () => {
+    for (const id of Object.keys(scenarios) as ScenarioId[]) {
+      renderPhone(scenarios[id]);
+      expect(screen.getByTestId('court-strip')).toBeTruthy();
+      cleanup();
+    }
+    renderPhone(scenarios.vote);
+    const strip = screen.getByTestId('court-strip');
+    expect(within(strip).getByText('1/5')).toBeTruthy();
+    expect(within(strip).getByText('2/6')).toBeTruthy();
+    expect(within(strip).getByText('1/3')).toBeTruthy();
+    expect(within(strip).getByText('Yusuf')).toBeTruthy();
+    expect(within(strip).getByText('Omar')).toBeTruthy();
+  });
+
+  it('opens the court record when tapped', () => {
+    renderPhone(scenarios.waiting);
+    fireEvent.click(screen.getByTestId('court-strip'));
+    expect(screen.getByRole('dialog', { name: theme.phone.courtRecord })).toBeTruthy();
   });
 });

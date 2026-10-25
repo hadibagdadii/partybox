@@ -1,7 +1,10 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import type { HostViewMessage } from '@partybox/shared';
+import { act, cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AppRoutes } from './App';
+import { fixtureRoom, scenes } from './games/diwan/tv/fixtures';
+import { getSocket } from './lib/socket';
 import { parseSlot, playerTokenKey } from './lib/storage';
 
 // Pages talk to the server through this module; keep tests offline.
@@ -53,6 +56,50 @@ describe('AppRoutes', () => {
       '/play?slot=2&code=BCDF',
       '/play?slot=3&code=BCDF',
     ]);
+  });
+});
+
+describe('Diwan host screen', () => {
+  // Node's own localStorage shadows jsdom's here; give the host a saved session.
+  function withSession() {
+    const saved = new Map([['partybox:host', JSON.stringify({ code: 'DMWN', hostToken: 't' })]]);
+    vi.stubGlobal('localStorage', {
+      getItem: (k: string) => saved.get(k) ?? null,
+      setItem: (k: string, v: string) => saved.set(k, v),
+      removeItem: (k: string) => saved.delete(k),
+    });
+  }
+
+  function sendHostView() {
+    const view = scenes.nominate.view;
+    const message: HostViewMessage = {
+      room: fixtureRoom(view),
+      games: [],
+      waitingOn: ['p2'],
+      game: view,
+    };
+    const on = vi.mocked(getSocket().on);
+    const handler = on.mock.calls.filter(([event]) => event === 'host:view').at(-1)?.[1] as (
+      m: HostViewMessage,
+    ) => void;
+    act(() => handler(message));
+  }
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('shows the TV by default', () => {
+    withSession();
+    renderAt('/host');
+    sendHostView();
+    expect(screen.getByTestId('tv-stage')).toBeTruthy();
+  });
+
+  it('keeps the debug host at ?debug=1 in dev', () => {
+    withSession();
+    renderAt('/host?debug=1');
+    sendHostView();
+    expect(screen.queryByTestId('tv-stage')).toBeNull();
+    expect(screen.getByRole('heading', { name: /Diwan · Nomination/ })).toBeTruthy();
   });
 });
 

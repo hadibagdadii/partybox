@@ -1,8 +1,8 @@
-import { theme, type DecreeId } from '@partybox/diwan';
+import { theme } from '@partybox/diwan';
 import { useEffect, useRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { colors } from '../tokens';
-import { ArchFrame, CrossedBlades, Star8, StarRule } from './ornaments';
+import { Star8, StarRule } from '../ornaments';
 
 type Variant = 'primary' | 'secondary' | 'danger' | 'ghost';
 
@@ -99,74 +99,6 @@ export function PlayerCard({
         {tag && <span className="text-sm uppercase tracking-wider text-court-mist">{tag}</span>}
       </span>
       {selected && <span className="text-sm font-semibold uppercase text-court-goldLight">✓</span>}
-    </button>
-  );
-}
-
-/**
- * A decree card. Loyal and Rebel differ in color, symbol (star vs. crossed blades),
- * arch shape (round vs. ogee), and lightness, so they read without color.
- */
-export function DecreeCard({
-  decree,
-  selected = false,
-  onSelect,
-  mark,
-  size = 'md',
-}: {
-  decree: DecreeId;
-  selected?: boolean;
-  onSelect?: () => void;
-  /** Small caption shown on the selected card, e.g. "Discard". */
-  mark?: string;
-  size?: 'sm' | 'md';
-}) {
-  const loyal = decree === 'loyal';
-  const body = (
-    <span
-      className={`relative flex w-full flex-col items-center justify-end gap-2 px-2 pb-3 ${
-        size === 'sm' ? 'aspect-[3/4] pt-6' : 'aspect-[5/7] pt-8'
-      }`}
-      style={{ color: loyal ? colors.loyalInk : colors.rebelInk }}
-    >
-      <ArchFrame
-        shape={loyal ? 'round' : 'ogee'}
-        fill={loyal ? colors.loyal : colors.rebel}
-        stroke={loyal ? colors.gold : colors.indigoLight}
-      />
-      <span className="relative flex flex-1 items-center">
-        {loyal ? (
-          <Star8 size={size === 'sm' ? 40 : 52} fill={colors.loyalInk} stroke={colors.gold} />
-        ) : (
-          <CrossedBlades size={size === 'sm' ? 42 : 56} color={colors.rebelInk} />
-        )}
-      </span>
-      <span
-        className={`relative text-center font-serif font-bold leading-tight ${size === 'sm' ? 'text-sm' : 'text-base'}`}
-      >
-        {theme.decrees[decree]}
-      </span>
-      {selected && mark && (
-        <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-court-goldLight px-3 py-0.5 text-xs font-bold uppercase tracking-wider text-court-ink shadow-lift">
-          {mark}
-        </span>
-      )}
-    </span>
-  );
-  if (!onSelect) return <div className="w-full">{body}</div>;
-  return (
-    <button
-      type="button"
-      aria-pressed={selected}
-      aria-label={theme.decrees[decree]}
-      onClick={onSelect}
-      className={`w-full rounded-card transition-transform duration-base ${
-        selected
-          ? 'motion-safe:-translate-y-2 drop-shadow-[0_0_10px_rgba(240,207,126,0.8)]'
-          : 'opacity-90'
-      }`}
-    >
-      {body}
     </button>
   );
 }

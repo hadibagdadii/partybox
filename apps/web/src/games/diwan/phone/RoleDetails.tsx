@@ -4,20 +4,9 @@ import {
   UNREST_LIMIT,
   theme,
   type DiwanPlayerView,
-  type TeamId,
 } from '@partybox/diwan';
-import { colors } from '../tokens';
-import { formatLog, type Names } from '../format';
-import { CrossedBlades, Star8 } from './ornaments';
-
-/** Team badge with a distinct symbol per team, like the decree cards. */
-export function TeamMark({ team, size = 22 }: { team: TeamId; size?: number }) {
-  return team === 'loyal' ? (
-    <Star8 size={size} fill={colors.emeraldLight} stroke={colors.gold} />
-  ) : (
-    <CrossedBlades size={size} color="#d9534f" />
-  );
-}
+import type { Names } from '../format';
+import { TeamMark } from '../ui/TeamMark';
 
 /** Everything this player is allowed to know about allegiances: theirs, teammates, secrets. */
 export function RoleDetails({ view, name }: { view: DiwanPlayerView; name: Names }) {
@@ -62,23 +51,6 @@ export function RoleDetails({ view, name }: { view: DiwanPlayerView; name: Names
         </div>
       )}
     </div>
-  );
-}
-
-/** Public log as plain sentences, newest first. */
-export function LogList({ view, name }: { view: DiwanPlayerView; name: Names }) {
-  if (view.log.length === 0) return <p className="text-court-mist">{theme.phone.emptyLog}</p>;
-  return (
-    <ol className="flex flex-col gap-2 text-lg">
-      {view.log
-        .map((entry, i) => ({ entry, i }))
-        .reverse()
-        .map(({ entry, i }) => (
-          <li key={i} className="border-l-2 border-court-gold/40 pl-3">
-            {formatLog(entry, name)}
-          </li>
-        ))}
-    </ol>
   );
 }
 

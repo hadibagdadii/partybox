@@ -1,6 +1,6 @@
 import { theme, type VoteId } from '@partybox/diwan';
 import { actionsOf, type ScreenProps } from '../screen';
-import { Rosette12 } from '../ornaments';
+import { Rosette12 } from '../../ornaments';
 import { Frame, Title } from '../ui';
 
 /** Two huge buttons. The vote can change until the reveal; the server decides when that is. */

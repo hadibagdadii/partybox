@@ -1,5 +1,6 @@
 import type { AckResult, GameOption, HostViewMessage, LobbyView } from '@partybox/shared';
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ComponentType, type ReactNode } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { gameScreens } from '../games/registry';
 import { getSocket, useConnected, useOnConnect } from '../lib/socket';
 import { hostSession, type HostSession } from '../lib/storage';
@@ -7,6 +8,8 @@ import { hostSession, type HostSession } from '../lib/storage';
 export function Host() {
   const socket = getSocket();
   const connected = useConnected(socket);
+  const [params] = useSearchParams();
+  const debug = import.meta.env.DEV && params.get('debug') === '1';
   const [session, setSession] = useState<HostSession | null>(() => hostSession.get());
   const [view, setView] = useState<HostViewMessage | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -68,14 +71,30 @@ export function Host() {
     );
   }
 
-  const GameHost = gameScreens[view.room.gameId]?.Host;
+  const screens = gameScreens[view.room.gameId];
+  const GameHost = (debug && screens?.HostDebug) || screens?.Host;
+  const playing = view.room.phase !== 'lobby' && !!GameHost;
+
+  if (playing && screens?.hostFullScreen && !debug) {
+    return (
+      <>
+        <GameHost room={view.room} game={view.game} newRoom={forget} />
+        {!connected && (
+          <p className="fixed left-1/2 top-4 z-50 -translate-x-1/2 rounded-full bg-red-900 px-6 py-2 text-xl text-white">
+            Reconnecting…
+          </p>
+        )}
+      </>
+    );
+  }
+
   return (
     <Screen>
       {!connected && (
         <p className="absolute top-6 rounded-full bg-red-900 px-6 py-2 text-xl">Reconnecting…</p>
       )}
-      {view.room.phase === 'lobby' || !GameHost ? (
-        <Lobby room={view.room} games={view.games} />
+      {!playing || !GameHost ? (
+        <Lobby room={view.room} games={view.games} Extras={screens?.HostLobbyExtras} />
       ) : (
         <>
           <p className="absolute right-8 top-6 text-3xl font-bold tracking-widest text-slate-500">
@@ -132,7 +151,15 @@ function WaitingOn({ room, ids }: { room: LobbyView; ids: string[] }) {
   );
 }
 
-function Lobby({ room, games }: { room: LobbyView; games: GameOption[] }) {
+function Lobby({
+  room,
+  games,
+  Extras,
+}: {
+  room: LobbyView;
+  games: GameOption[];
+  Extras?: ComponentType;
+}) {
   const socket = getSocket();
   const [botError, setBotError] = useState<string | null>(null);
   const missing = room.minPlayers - room.players.length;
@@ -188,6 +215,7 @@ function Lobby({ room, games }: { room: LobbyView; games: GameOption[] }) {
         {room.gameName} · {room.players.length}/{room.maxPlayers} players
         {missing > 0 ? ` · need ${missing} more` : ' · waiting for the VIP to start'}
       </p>
+      {Extras && <Extras />}
       <ul className="flex max-w-6xl flex-wrap justify-center gap-4">
         {room.players.map((p) => (
           <li
