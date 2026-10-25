@@ -40,3 +40,7 @@ In dev, the host lobby has a game picker (Tap Race is dev-only) and **Add bot** 
 
 To join from real phones on your Wi-Fi, open the TV at your LAN address (Vite prints it as
 `Network:`), or set `VITE_PUBLIC_URL` so the join link on the TV points there.
+
+## Deploying
+
+See [DEPLOY.md](DEPLOY.md) for the Docker image and Railway setup.

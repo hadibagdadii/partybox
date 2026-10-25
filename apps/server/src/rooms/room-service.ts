@@ -11,6 +11,7 @@ import {
 import { randomInt, randomUUID } from 'node:crypto';
 import type { Room, Seat } from './room.js';
 export { AWAY_LONG_MS } from './room.js';
+import { silentLogger, type Logger } from '../logger.js';
 import type { RoomStore } from './room-store.js';
 import { buildHostView, buildPlayerView } from './views.js';
 
@@ -29,7 +30,15 @@ export interface RoomServiceOptions {
   newId?: () => string;
   /** Clock for the away flag. */
   now?: () => number;
+  /** Rooms allowed at once, across everyone. */
+  maxRooms?: number;
+  /** Rooms one owner (client IP hash) may hold open at once. */
+  maxRoomsPerOwner?: number;
+  logger?: Logger;
 }
+
+export const DEFAULT_MAX_ROOMS = 200;
+export const DEFAULT_MAX_ROOMS_PER_OWNER = 3;
 
 function fail(
   code: ErrorCode,
@@ -52,6 +61,9 @@ export class RoomService {
   private readonly randInt: (maxExclusive: number) => number;
   private readonly newId: () => string;
   private readonly now: () => number;
+  private readonly maxRooms: number;
+  private readonly maxRoomsPerOwner: number;
+  private readonly logger: Logger;
 
   constructor(options: RoomServiceOptions) {
     this.store = options.store;
@@ -60,10 +72,31 @@ export class RoomService {
     this.randInt = options.randInt ?? ((n) => randomInt(n));
     this.newId = options.newId ?? randomUUID;
     this.now = options.now ?? Date.now;
+    this.maxRooms = options.maxRooms ?? DEFAULT_MAX_ROOMS;
+    this.maxRoomsPerOwner = options.maxRoomsPerOwner ?? DEFAULT_MAX_ROOMS_PER_OWNER;
+    this.logger = options.logger ?? silentLogger;
   }
 
-  createRoom(gameId = this.defaultGameId): AckResult<{ code: string; hostToken: string }> {
+  /** `ownerKey` identifies the creator (an IP hash) for the per-owner cap. */
+  createRoom(
+    gameId = this.defaultGameId,
+    ownerKey: string | null = null,
+  ): AckResult<{ code: string; hostToken: string }> {
     if (!this.games.has(gameId)) return fail('unknown_game', `No game called ${gameId}`);
+    let total = 0;
+    let owned = 0;
+    for (const room of this.store.all()) {
+      total++;
+      if (ownerKey !== null && room.ownerKey === ownerKey) owned++;
+    }
+    if (total >= this.maxRooms) {
+      this.logger.warn({ ipHash: ownerKey, cap: 'total' }, 'room_cap_hit');
+      return fail('too_many_rooms', 'The server is full right now. Try again later.');
+    }
+    if (owned >= this.maxRoomsPerOwner) {
+      this.logger.warn({ ipHash: ownerKey, cap: 'per_ip' }, 'room_cap_hit');
+      return fail('too_many_rooms', 'Too many rooms are open from your network already.');
+    }
     const code = generateRoomCode(this.randInt, (c) => this.store.has(c));
     const room: Room = {
       code,
@@ -76,8 +109,10 @@ export class RoomService {
       rng: createRng(this.randInt(2 ** 31)),
       tutorial: null,
       removedTokens: new Set(),
+      ownerKey,
     };
     this.store.save(room);
+    this.logger.info({ code, gameId, ipHash: ownerKey }, 'room_created');
     return { ok: true, code, hostToken: room.hostToken };
   }
 
@@ -185,6 +220,10 @@ export class RoomService {
     room.phase = 'playing';
     room.tutorial = null;
     this.store.save(room);
+    this.logger.info(
+      { code: room.code, gameId: room.gameId, players: seats.length },
+      'game_started',
+    );
     return { ok: true };
   }
 
@@ -238,7 +277,11 @@ export class RoomService {
     const result = game.reduce(room.game.state, { playerId, action: parsed.data }, room.game.rng);
     if (!result.ok) return { ok: false, error: result.error };
     room.game.state = result.state;
-    if (game.isOver(result.state)) room.phase = 'over';
+    if (game.isOver(result.state)) {
+      room.phase = 'over';
+      const winner = game.winnerTeam?.(result.state) ?? null;
+      this.logger.info({ code, gameId: room.gameId, winner }, 'game_ended');
+    }
     this.store.save(room);
     return { ok: true };
   }
@@ -278,6 +321,9 @@ export class RoomService {
     const room = this.store.get(code);
     if (!room) return roomNotFound();
     if (room.phase === 'lobby') return fail('wrong_phase', 'There is no game in progress');
+    if (room.phase === 'playing') {
+      this.logger.info({ code, gameId: room.gameId, winner: null, endedBy: 'host' }, 'game_ended');
+    }
     room.phase = 'lobby';
     room.game = null;
     room.tutorial = null;

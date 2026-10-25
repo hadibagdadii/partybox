@@ -30,4 +30,6 @@ export interface Room {
   tutorial: number | null;
   /** Tokens of seats that were removed, so a returning phone learns why. Never broadcast. */
   removedTokens: Set<string>;
+  /** Hash of the creating client's IP, for the per-IP room cap. Never broadcast. */
+  ownerKey: string | null;
 }

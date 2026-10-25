@@ -1,47 +1,48 @@
-import { createServer } from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Server } from 'socket.io';
-import { createApp } from './app.js';
-import { DEFAULT_GAME_ID, createGameRegistry } from './games.js';
-import { RoomService } from './rooms/room-service.js';
-import { MemoryRoomStore } from './rooms/room-store.js';
-import { registerSocketHandlers, type IoServer } from './socket.js';
+import { loadConfig } from './config.js';
+import { createLogger } from './logger.js';
+import { createPartyboxServer } from './server.js';
 
-const isProd = process.env.NODE_ENV === 'production';
-const port = Number(process.env.PORT ?? 3000);
 const here = path.dirname(fileURLToPath(import.meta.url));
-const webDist = process.env.WEB_DIST ?? path.resolve(here, '../../web/dist');
-
-/** Dev only: slow the bots down (e.g. to watch TV moments play out). */
-function envMs(key: string): number | undefined {
-  const n = Number(process.env[key]);
-  return !isProd && Number.isFinite(n) && n >= 0 && process.env[key] ? n : undefined;
-}
-
-// In dev, Vite serves the web app and proxies /healthz and /socket.io here.
-const app = createApp({ webDist: isProd ? webDist : undefined });
-const httpServer = createServer(app);
-const io: IoServer = new Server(httpServer);
-
-const rooms = new RoomService({
-  store: new MemoryRoomStore(),
-  games: createGameRegistry({ devTools: !isProd }),
-  defaultGameId: DEFAULT_GAME_ID,
+const { config, warnings } = loadConfig(process.env, {
+  webDist: path.resolve(here, '../../web/dist'),
 });
-const sockets = registerSocketHandlers(io, rooms, {
-  devTools: !isProd,
-  bots: { minDelayMs: envMs('BOT_MIN_DELAY_MS'), maxDelayMs: envMs('BOT_MAX_DELAY_MS') },
+const logger = createLogger();
+for (const warning of warnings) logger.warn({ warning }, 'config_ignored');
+
+const server = createPartyboxServer(config, logger);
+const port = await server.listen(config.port);
+logger.info(
+  { port, env: config.isProd ? 'production' : 'development', devTools: config.devTools },
+  'server_started',
+);
+
+/** Rooms live in memory, so stopping ends every game. Warn the clients, then close cleanly. */
+let stopping = false;
+const stop = (signal: string) => {
+  if (stopping) {
+    logger.warn({ signal }, 'server_forced_exit');
+    process.exit(1);
+  }
+  stopping = true;
+  logger.info({ signal }, 'server_stopping');
+  setTimeout(() => {
+    logger.error({ signal }, 'server_shutdown_timeout');
+    process.exit(1);
+  }, 5000).unref();
+  void server.shutdown().then(() => {
+    logger.info({}, 'server_stopped');
+    process.exit(0);
+  });
+};
+process.on('SIGTERM', () => stop('SIGTERM'));
+process.on('SIGINT', () => stop('SIGINT'));
+
+process.on('uncaughtException', (err) => {
+  logger.error({ err }, 'error');
+  process.exit(1);
 });
-
-setInterval(() => {
-  const removed = rooms.sweepIdle();
-  for (const code of removed) sockets.cancelRoom(code);
-  if (removed.length) console.log(`expired idle rooms: ${removed.join(', ')}`);
-}, 60_000).unref();
-
-httpServer.listen(port, () => {
-  console.log(
-    `partybox server listening on http://localhost:${port} (${isProd ? 'production' : 'development'})`,
-  );
+process.on('unhandledRejection', (err) => {
+  logger.error({ err }, 'error');
 });

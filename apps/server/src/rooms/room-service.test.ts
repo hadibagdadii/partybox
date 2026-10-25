@@ -383,3 +383,39 @@ describe('RoomService away flag', () => {
     expect(player()).toMatchObject({ connected: true, awayLong: false });
   });
 });
+
+describe('RoomService room caps', () => {
+  const capped = (maxRooms: number, maxRoomsPerOwner: number) =>
+    new RoomService({
+      store: new MemoryRoomStore(),
+      games: createGameRegistry({ devTools: false }),
+      defaultGameId: DEFAULT_GAME_ID,
+      maxRooms,
+      maxRoomsPerOwner,
+    });
+
+  it('limits how many rooms one owner holds open', () => {
+    const rooms = capped(10, 2);
+    ok(rooms.createRoom(undefined, 'ip-a'));
+    ok(rooms.createRoom(undefined, 'ip-a'));
+    expect(errorCode(rooms.createRoom(undefined, 'ip-a'))).toBe('too_many_rooms');
+    ok(rooms.createRoom(undefined, 'ip-b'));
+  });
+
+  it('limits rooms across everyone, and frees space when rooms expire', () => {
+    const store = new MemoryRoomStore(1000, () => now);
+    let now = 0;
+    const rooms = new RoomService({
+      store,
+      games: createGameRegistry({ devTools: false }),
+      defaultGameId: DEFAULT_GAME_ID,
+      maxRooms: 2,
+    });
+    ok(rooms.createRoom(undefined, 'ip-a'));
+    ok(rooms.createRoom(undefined, 'ip-b'));
+    expect(errorCode(rooms.createRoom(undefined, 'ip-c'))).toBe('too_many_rooms');
+    now = 5000;
+    expect(rooms.sweepIdle()).toHaveLength(2);
+    ok(rooms.createRoom(undefined, 'ip-c'));
+  });
+});

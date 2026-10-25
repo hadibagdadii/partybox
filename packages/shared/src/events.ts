@@ -65,7 +65,10 @@ export type ErrorCode =
   | 'no_tutorial'
   | 'cannot_remove'
   | 'removed'
-  | 'dev_only';
+  | 'dev_only'
+  | 'rate_limited'
+  | 'too_many_rooms'
+  | 'shutting_down';
 
 export interface ErrorPayload {
   code: ErrorCode;
@@ -170,4 +173,6 @@ export interface ServerToClientEvents {
   'player:view': (view: PlayerViewMessage) => void;
   /** This phone's seat is gone: the host removed it, or the player left. */
   'player:removed': () => void;
+  /** The server is restarting; this connection is about to close. */
+  'server:shutdown': () => void;
 }

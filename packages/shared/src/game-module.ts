@@ -47,6 +47,8 @@ export interface GameModule<State, Action, Event, HostView, PlayerView> {
   waitingOn?(state: State): string[];
   /** Every action `playerId` may send right now. Dev bots pick from these. */
   legalActions?(state: State, playerId: string): Action[];
+  /** Neutral id of the winning team once the game is over, for server logs. */
+  winnerTeam?(state: State): string | null;
 }
 
 /** A game module with its types erased, as the room system holds it. */

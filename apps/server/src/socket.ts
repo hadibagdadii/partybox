@@ -17,6 +17,10 @@ import {
 import { randomInt } from 'node:crypto';
 import type { Server, Socket } from 'socket.io';
 import type { z } from 'zod';
+import { clientIp } from './client-ip.js';
+import { DEFAULT_LIMITS, type ServerConfig } from './config.js';
+import { hashIp, silentLogger, type Logger } from './logger.js';
+import { RateLimiter } from './rate-limit.js';
 import { BotRunner } from './rooms/bot-runner.js';
 import { AWAY_LONG_MS, type RoomService } from './rooms/room-service.js';
 
@@ -33,12 +37,21 @@ export interface SocketOptions {
   /** Enables dev-only events such as adding bots, and runs the bots. */
   devTools: boolean;
   /** Bot timing and seed; tests set the delays to 0. */
-  bots?: { minDelayMs?: number; maxDelayMs?: number; seed?: number };
+  bots?: { minDelayMs?: number; maxDelayMs?: number; seed?: number } | undefined;
+  /** Per-IP limits on creating and joining rooms. */
+  limits?: ServerConfig['limits'];
+  /** Proxies in front of the server whose X-Forwarded-For entries are trusted. */
+  trustProxyHops?: number;
+  logger?: Logger;
 }
 
 export interface SocketHandle {
   /** Clears pending bot timers for a room that is going away. */
   cancelRoom(code: string): void;
+  /** Forgets rate-limit windows that have expired. */
+  prune(): void;
+  /** Refuses new rooms from now on and tells every client the server is going away. */
+  drain(): void;
   /** Clears every pending bot timer. */
   close(): void;
 }
@@ -53,6 +66,14 @@ const invalidPayload = {
 const notInRoom = {
   ok: false,
   error: { code: 'not_in_room', message: 'Join a room first' },
+} as const;
+const rateLimited = {
+  ok: false,
+  error: { code: 'rate_limited', message: 'Too many tries. Wait a minute and try again.' },
+} as const;
+const shuttingDown = {
+  ok: false,
+  error: { code: 'shutting_down', message: 'The server is restarting. Try again in a moment.' },
 } as const;
 
 /** Clients can send anything; never trust that `ack` is callable. */
@@ -70,6 +91,19 @@ export function registerSocketHandlers(
   rooms: RoomService,
   options: SocketOptions,
 ): SocketHandle {
+  const logger = options.logger ?? silentLogger;
+  const limits = options.limits ?? DEFAULT_LIMITS;
+  const createLimit = new RateLimiter(limits.createRoom.max, limits.createRoom.windowMs);
+  const joinLimit = new RateLimiter(limits.join.max, limits.join.windowMs);
+  let draining = false;
+
+  /** Records an attempt; logs and returns false when the client is over the limit. */
+  const allow = (limiter: RateLimiter, limit: string, ipHash: string) => {
+    if (limiter.take(ipHash)) return true;
+    logger.warn({ ipHash, limit }, 'rate_limit_hit');
+    return false;
+  };
+
   const bots = options.devTools
     ? new BotRunner({
         rooms,
@@ -183,6 +217,10 @@ export function registerSocketHandlers(
   };
 
   io.on('connection', (socket) => {
+    const { headers, address } = socket.handshake;
+    const ipHash = hashIp(
+      clientIp(headers['x-forwarded-for'], address, options.trustProxyHops ?? 0),
+    );
     socket.on('ping', (ack) => {
       if (typeof ack === 'function') ack({ ok: true, at: Date.now() });
     });
@@ -191,7 +229,9 @@ export function registerSocketHandlers(
       const reply = replier<{ code: string; hostToken: string }>(ack);
       const input = parse(createRoomSchema, payload);
       if (!input) return reply(invalidPayload);
-      const result = rooms.createRoom(input.gameId);
+      if (draining) return reply(shuttingDown);
+      if (!allow(createLimit, 'room_create', ipHash)) return reply(rateLimited);
+      const result = rooms.createRoom(input.gameId, ipHash);
       if (result.ok) bindHost(socket, result.code);
       reply(result);
       if (result.ok) broadcast(result.code);
@@ -215,6 +255,7 @@ export function registerSocketHandlers(
 
     socket.on('room:join', (payload, ack) => {
       const reply = replier<{ code: string; playerId: string; playerToken: string }>(ack);
+      if (!allow(joinLimit, 'room_join', ipHash)) return reply(rateLimited);
       const input = parse(joinRoomSchema, payload);
       if (!input) return reply(invalidPayload);
       const result = rooms.join(input.code, input.name);
@@ -335,6 +376,14 @@ export function registerSocketHandlers(
           awayTimers.delete(key);
         }
       }
+    },
+    prune: () => {
+      createLimit.prune();
+      joinLimit.prune();
+    },
+    drain: () => {
+      draining = true;
+      io.emit('server:shutdown');
     },
     close: () => {
       bots?.cancelAll();

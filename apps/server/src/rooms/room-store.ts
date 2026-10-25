@@ -9,6 +9,8 @@ export interface RoomStore {
   /** Saves the room and marks it active now. */
   save(room: Room): void;
   delete(code: string): void;
+  /** Every live room, for counting against the room caps. */
+  all(): Iterable<Room>;
   /** Removes rooms idle longer than the TTL and returns their codes. */
   sweepIdle(): string[];
 }
@@ -35,6 +37,10 @@ export class MemoryRoomStore implements RoomStore {
 
   delete(code: string): void {
     this.rooms.delete(code);
+  }
+
+  *all(): Iterable<Room> {
+    for (const entry of this.rooms.values()) yield entry.room;
   }
 
   sweepIdle(): string[] {

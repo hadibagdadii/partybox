@@ -14,6 +14,7 @@ const room = (code: string): Room => ({
   rng: createRng(1),
   tutorial: null,
   removedTokens: new Set(),
+  ownerKey: null,
 });
 
 describe('MemoryRoomStore', () => {

@@ -46,4 +46,5 @@ export const diwanModule: GameModule<
   isOver: (state) => state.phase === 'over',
   waitingOn,
   legalActions,
+  winnerTeam: (state) => state.winner?.team ?? null,
 };
