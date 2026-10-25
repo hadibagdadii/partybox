@@ -1,5 +1,6 @@
 import type { GameModule } from '@partybox/shared';
 import { actionSchema, type DiwanAction } from './actions.js';
+import { legalActions, waitingOn } from './legal.js';
 import { reduce } from './reduce.js';
 import { MAX_PLAYERS, MIN_PLAYERS } from './rules.js';
 import { createInitialState } from './setup.js';
@@ -10,7 +11,8 @@ export * from './ids.js';
 export { theme } from './theme.js';
 export { actionSchema, type DiwanAction } from './actions.js';
 export { eligibleWazirIds, powerTargetIds } from './reduce.js';
-export { powerTrack } from './rules.js';
+export { legalActions, waitingOn } from './legal.js';
+export { LOYAL_DECREES_TO_WIN, REBEL_DECREES_TO_WIN, UNREST_LIMIT, powerTrack } from './rules.js';
 export type * from './state.js';
 export type { DiwanHostView, DiwanPlayerView } from './views.js';
 
@@ -33,4 +35,6 @@ export const diwanModule: GameModule<
   getHostView,
   getPlayerView,
   isOver: (state) => state.phase === 'over',
+  waitingOn,
+  legalActions,
 };

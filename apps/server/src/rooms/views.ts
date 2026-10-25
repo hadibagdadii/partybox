@@ -1,5 +1,6 @@
 import type {
   AnyGameModule,
+  GameOption,
   HostViewMessage,
   LobbyView,
   PlayerViewMessage,
@@ -26,9 +27,15 @@ export function buildLobbyView(room: Room, game: AnyGameModule): LobbyView {
 }
 
 /** Public projection only: built from `getHostView`, never `getPlayerView`. */
-export function buildHostView(room: Room, game: AnyGameModule): HostViewMessage {
+export function buildHostView(
+  room: Room,
+  game: AnyGameModule,
+  games: GameOption[],
+): HostViewMessage {
   return {
     room: buildLobbyView(room, game),
+    games,
+    waitingOn: room.game && game.waitingOn ? game.waitingOn(room.game.state) : [],
     game: room.game ? game.getHostView(room.game.state) : null,
   };
 }

@@ -43,7 +43,8 @@ export function createInitialState(seats: readonly SeatInfo[], rng: Rng): DiwanS
   }));
   return {
     players,
-    phase: 'nominate',
+    phase: 'reveal',
+    acknowledgedIds: [],
     rotationSeat: firstSeat,
     ameerId: (players[firstSeat] as (typeof players)[number]).id,
     nomineeId: null,

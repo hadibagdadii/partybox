@@ -1,20 +1,21 @@
 import { createRng, type AckResult } from '@partybox/shared';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_GAME_ID, gameRegistry } from '../games.js';
+import { DEFAULT_GAME_ID, createGameRegistry } from '../games.js';
 import { MemoryRoomStore } from './room-store.js';
 import { RoomService } from './room-service.js';
 
-function setup() {
+/** Most room rules are easiest to exercise with Tap Race's 2-player games. */
+function setup(gameId = 'tap-race', devTools = true) {
   let id = 0;
   const rng = createRng(99);
   const rooms = new RoomService({
     store: new MemoryRoomStore(),
-    games: gameRegistry,
+    games: createGameRegistry({ devTools }),
     defaultGameId: DEFAULT_GAME_ID,
     randInt: rng.int,
     newId: () => `id-${++id}`,
   });
-  const created = ok(rooms.createRoom());
+  const created = ok(rooms.createRoom(gameId));
   return { rooms, code: created.code, hostToken: created.hostToken };
 }
 
@@ -155,5 +156,66 @@ describe('RoomService views', () => {
     const json = JSON.stringify([rooms.hostView(code), rooms.playerView(code, vip.playerId)]);
     expect(json).not.toContain(vip.playerToken);
     expect(json).not.toContain(hostToken);
+  });
+});
+
+describe('RoomService games', () => {
+  it('defaults to Diwan and offers Tap Race only with dev tools', () => {
+    const { rooms } = setup(DEFAULT_GAME_ID, false);
+    const { code } = ok(rooms.createRoom());
+    expect(rooms.hostView(code)?.room.gameId).toBe('diwan');
+    expect(rooms.availableGames().map((g) => g.id)).toEqual(['diwan']);
+    expect(errorCode(rooms.createRoom('tap-race'))).toBe('unknown_game');
+    expect(
+      setup('tap-race', true)
+        .rooms.availableGames()
+        .map((g) => g.id),
+    ).toEqual(['diwan', 'tap-race']);
+  });
+
+  it('switches games in the lobby only', () => {
+    const { rooms, code } = setup('diwan');
+    ok(rooms.setGame(code, 'tap-race'));
+    expect(rooms.hostView(code)?.room).toMatchObject({ gameId: 'tap-race', minPlayers: 2 });
+    expect(errorCode(rooms.setGame(code, 'chess'))).toBe('unknown_game');
+    const vip = ok(rooms.join(code, 'Amina'));
+    ok(rooms.join(code, 'Bilal'));
+    ok(rooms.start(code, vip.playerId));
+    expect(errorCode(rooms.setGame(code, 'diwan'))).toBe('game_in_progress');
+  });
+
+  it('lets the host start a room of bots in dev', () => {
+    const { rooms, code } = setup('diwan');
+    for (let i = 0; i < 5; i++) ok(rooms.addBot(code));
+    ok(rooms.devStart(code));
+    expect(rooms.hostView(code)?.room.phase).toBe('playing');
+  });
+});
+
+describe('RoomService bot turns', () => {
+  it('lists only bots the game waits on, never humans', () => {
+    const { rooms, code } = setup('diwan');
+    const vip = ok(rooms.join(code, 'Amina'));
+    const botIds = Array.from({ length: 4 }, () => ok(rooms.addBot(code)).playerId);
+    expect(rooms.botTurns(code)).toEqual([]);
+    ok(rooms.start(code, vip.playerId));
+
+    const turns = rooms.botTurns(code);
+    expect(turns.map((t) => t.botId)).toEqual(botIds);
+    for (const t of turns) expect(t.actions).toEqual([{ type: 'acknowledge' }]);
+    expect(rooms.hostView(code)?.waitingOn).toEqual([vip.playerId, ...botIds]);
+
+    for (const id of botIds) ok(rooms.act(code, id, { type: 'acknowledge' }));
+    expect(rooms.botTurns(code)).toEqual([]);
+    expect(rooms.hostView(code)?.waitingOn).toEqual([vip.playerId]);
+  });
+
+  it('has nothing for games without legal actions', () => {
+    const { rooms, code } = setup('tap-race');
+    const vip = ok(rooms.join(code, 'Amina'));
+    ok(rooms.addBot(code));
+    ok(rooms.start(code, vip.playerId));
+    expect(rooms.botTurns(code)).toEqual([]);
+    expect(rooms.hostView(code)?.waitingOn).toHaveLength(2);
   });
 });

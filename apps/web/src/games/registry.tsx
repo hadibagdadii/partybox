@@ -1,5 +1,7 @@
 import type { LobbyView, PlayerViewMessage } from '@partybox/shared';
 import type { ComponentType } from 'react';
+import { DiwanHost } from './diwan/DiwanHost';
+import { DiwanPlayer } from './diwan/DiwanPlayer';
 import { TapRaceHost, TapRacePlayer } from './tap-race/TapRace';
 
 export interface HostScreenProps {
@@ -22,5 +24,6 @@ export interface GameScreens {
 }
 
 export const gameScreens: Record<string, GameScreens> = {
+  diwan: { Host: DiwanHost, Player: DiwanPlayer },
   'tap-race': { Host: TapRaceHost, Player: TapRacePlayer },
 };

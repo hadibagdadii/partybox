@@ -19,6 +19,7 @@ pnpm dev        # server on :3000, web on :5173 (open http://localhost:5173)
 | `pnpm build`     | Builds all packages and the web app                   |
 | `pnpm start`     | Production server on :3000, serving the built web app |
 | `pnpm test`      | Vitest across all packages                            |
+| `pnpm test:full` | Same, with 1,000 random Diwan games instead of 200    |
 | `pnpm typecheck` | `tsc -b` over all project references                  |
 | `pnpm lint`      | ESLint + Prettier check                               |
 
@@ -32,8 +33,9 @@ pnpm dev        # server on :3000, web on :5173 (open http://localhost:5173)
 
 ## Testing many players on one laptop
 
-In dev, the host lobby has an **Add bot** button, and `/dev?code=ABCD&n=7` opens seven phone
-views side by side. Each iframe loads `/play?slot=N`, which stores its reconnect token under
+In dev, the host lobby has a game picker (Tap Race is dev-only) and **Add bot** and **Start
+(dev)** buttons; bots play Diwan by picking a random legal move after 0.5 to 1.2 s. Also,
+`/dev?code=ABCD&n=7` opens seven phone views side by side. Each iframe loads `/play?slot=N`, which stores its reconnect token under
 `partybox:ABCD:slotN` so the iframes get separate seats.
 
 To join from real phones on your Wi-Fi, open the TV at your LAN address (Vite prints it as

@@ -41,6 +41,10 @@ export interface GameModule<State, Action, Event, HostView, PlayerView> {
   /** Host view plus only what this player is allowed to know. */
   getPlayerView(state: State, playerId: string): PlayerView;
   isOver(state: State): boolean;
+  /** Ids of players the game cannot advance without. The host screen lists them. */
+  waitingOn?(state: State): string[];
+  /** Every action `playerId` may send right now. Dev bots pick from these. */
+  legalActions?(state: State, playerId: string): Action[];
 }
 
 /** A game module with its types erased, as the room system holds it. */

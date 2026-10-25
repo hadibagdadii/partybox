@@ -4,6 +4,7 @@ import {
   type AckResult,
   type AnyGameModule,
   type ErrorCode,
+  type GameOption,
   type HostViewMessage,
   type PlayerViewMessage,
 } from '@partybox/shared';
@@ -11,6 +12,12 @@ import { randomInt, randomUUID } from 'node:crypto';
 import type { Room, Seat } from './room.js';
 import type { RoomStore } from './room-store.js';
 import { buildHostView, buildPlayerView } from './views.js';
+
+/** A bot seat the game is waiting on, with every action it may take. */
+export interface BotTurn {
+  botId: string;
+  actions: unknown[];
+}
 
 export interface RoomServiceOptions {
   store: RoomStore;
@@ -64,6 +71,25 @@ export class RoomService {
     };
     this.store.save(room);
     return { ok: true, code, hostToken: room.hostToken };
+  }
+
+  /** Switches the room's game while everyone is still in the lobby. */
+  setGame(code: string, gameId: string): AckResult {
+    const room = this.store.get(code);
+    if (!room) return roomNotFound();
+    const game = this.games.get(gameId);
+    if (!game) return fail('unknown_game', `No game called ${gameId}`);
+    if (room.phase !== 'lobby') return fail('game_in_progress', 'That game has already started');
+    if (room.seats.length > game.maxPlayers) {
+      return fail('room_full', `${game.displayName} allows at most ${game.maxPlayers} players`);
+    }
+    room.gameId = gameId;
+    this.store.save(room);
+    return { ok: true };
+  }
+
+  availableGames(): GameOption[] {
+    return [...this.games.values()].map((g) => ({ id: g.id, name: g.displayName }));
   }
 
   resumeHost(code: string, hostToken: string): AckResult {
@@ -122,8 +148,19 @@ export class RoomService {
     const room = this.store.get(code);
     if (!room) return roomNotFound();
     if (!room.seats.some((s) => s.id === playerId)) return notInRoom();
-    const game = this.gameFor(room);
     if (room.vipId !== playerId) return fail('not_vip', 'Only the VIP can start the game');
+    return this.startRoom(room);
+  }
+
+  /** Dev-only: the host starts the game, so a room of bots with no VIP can play. */
+  devStart(code: string): AckResult {
+    const room = this.store.get(code);
+    if (!room) return roomNotFound();
+    return this.startRoom(room);
+  }
+
+  private startRoom(room: Room): AckResult {
+    const game = this.gameFor(room);
     if (room.phase !== 'lobby') return fail('wrong_phase', 'The game has already started');
     if (room.seats.length < game.minPlayers) {
       return fail('not_enough_players', `Need at least ${game.minPlayers} players`);
@@ -168,13 +205,27 @@ export class RoomService {
     return { ok: true };
   }
 
+  /** Bots the game is waiting on. Humans are never acted for, connected or not. */
+  botTurns(code: string): BotTurn[] {
+    const room = this.store.get(code);
+    if (!room || room.phase !== 'playing' || !room.game) return [];
+    const game = this.gameFor(room);
+    if (!game.waitingOn || !game.legalActions) return [];
+    const { state } = room.game;
+    const waiting = new Set(game.waitingOn(state));
+    return room.seats
+      .filter((s) => s.isBot && waiting.has(s.id))
+      .map((s) => ({ botId: s.id, actions: game.legalActions?.(state, s.id) ?? [] }))
+      .filter((turn) => turn.actions.length > 0);
+  }
+
   sweepIdle(): string[] {
     return this.store.sweepIdle();
   }
 
   hostView(code: string): HostViewMessage | null {
     const room = this.store.get(code);
-    return room ? buildHostView(room, this.gameFor(room)) : null;
+    return room ? buildHostView(room, this.gameFor(room), this.availableGames()) : null;
   }
 
   playerView(code: string, playerId: string): PlayerViewMessage | null {

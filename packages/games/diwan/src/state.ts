@@ -1,7 +1,7 @@
 import type { DecreeId, PowerId, RoleId, TeamId, VoteId } from './ids.js';
 
 export type Phase =
-  'nominate' | 'vote' | 'ameerDiscard' | 'wazirEnact' | 'vetoPending' | 'power' | 'over';
+  'reveal' | 'nominate' | 'vote' | 'ameerDiscard' | 'wazirEnact' | 'vetoPending' | 'power' | 'over';
 
 export interface DiwanPlayer {
   id: string;
@@ -40,6 +40,8 @@ export interface DiwanState {
   /** Seat order. */
   players: DiwanPlayer[];
   phase: Phase;
+  /** Players who have seen their role. The first round starts once everyone has. */
+  acknowledgedIds: string[];
   /** Seat of the Ameer the rotation continues from; a Successor does not move it. */
   rotationSeat: number;
   ameerId: string;

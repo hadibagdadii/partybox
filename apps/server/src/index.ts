@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Server } from 'socket.io';
 import { createApp } from './app.js';
-import { DEFAULT_GAME_ID, gameRegistry } from './games.js';
+import { DEFAULT_GAME_ID, createGameRegistry } from './games.js';
 import { RoomService } from './rooms/room-service.js';
 import { MemoryRoomStore } from './rooms/room-store.js';
 import { registerSocketHandlers, type IoServer } from './socket.js';
@@ -20,13 +20,14 @@ const io: IoServer = new Server(httpServer);
 
 const rooms = new RoomService({
   store: new MemoryRoomStore(),
-  games: gameRegistry,
+  games: createGameRegistry({ devTools: !isProd }),
   defaultGameId: DEFAULT_GAME_ID,
 });
-registerSocketHandlers(io, rooms, { devTools: !isProd });
+const sockets = registerSocketHandlers(io, rooms, { devTools: !isProd });
 
 setInterval(() => {
   const removed = rooms.sweepIdle();
+  for (const code of removed) sockets.cancelRoom(code);
   if (removed.length) console.log(`expired idle rooms: ${removed.join(', ')}`);
 }, 60_000).unref();
 

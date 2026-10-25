@@ -29,6 +29,8 @@ export interface GameOptions {
   ameerSeat?: number;
   enacted?: Partial<Record<DecreeId, number>>;
   unrest?: number;
+  /** Keep the role reveal instead of skipping straight to the first nomination. */
+  reveal?: boolean;
 }
 
 /** A scripted game: known roles, a stacked deck, and the chosen first Ameer. */
@@ -44,6 +46,10 @@ export function makeGame(opts: GameOptions = {}): DiwanState {
   state.ameerId = pid(ameerSeat);
   state.enacted = { loyal: 0, rebel: 0, ...opts.enacted };
   state.unrest = opts.unrest ?? 0;
+  if (!opts.reveal) {
+    state.phase = 'nominate';
+    state.acknowledgedIds = state.players.map((p) => p.id);
+  }
   return state;
 }
 

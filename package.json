@@ -12,6 +12,7 @@
     "start": "pnpm --filter @partybox/server start",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:full": "PROPERTY_RUNS=1000 vitest run",
     "typecheck": "tsc -b",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write ."

@@ -56,11 +56,12 @@ describe('setup', () => {
     expect(s.discard).toEqual([]);
   });
 
-  it('starts at nomination with a random Ameer', () => {
+  it('starts at the role reveal with a random Ameer and nobody acknowledged', () => {
     const firstAmeers = new Set<string>();
     for (let seed = 0; seed < 50; seed++) {
       const s = createInitialState(seats(7), createRng(seed));
-      expect(s.phase).toBe('nominate');
+      expect(s.phase).toBe('reveal');
+      expect(s.acknowledgedIds).toEqual([]);
       expect(s.ameerId).toBe(s.players[s.rotationSeat]?.id);
       firstAmeers.add(s.ameerId);
     }

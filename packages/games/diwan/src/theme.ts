@@ -1,4 +1,5 @@
 import type { DecreeId, OfficeId, PowerId, RoleId, TeamId, VoteId } from './ids.js';
+import type { Phase, WinReason } from './state.js';
 
 export interface VoteLabel {
   label: string;
@@ -39,6 +40,32 @@ export const theme = {
     execution: 'Exile',
   } satisfies Record<PowerId, string>,
   veto: 'Joint Veto',
+  phases: {
+    reveal: 'Role reveal',
+    nominate: 'Nomination',
+    vote: 'Vote',
+    ameerDiscard: 'Ameer discards',
+    wazirEnact: 'Wazir enacts',
+    vetoPending: 'Veto proposed',
+    power: 'Executive power',
+    over: 'Game over',
+  } satisfies Record<Phase, string>,
+  actions: {
+    acknowledge: 'I have seen my role',
+    nominate: 'Nominate as Wazir',
+    ameerDiscard: 'Discard',
+    wazirEnact: 'Enact',
+    proposeVeto: 'Propose a Joint Veto',
+    acceptVeto: 'Accept the veto',
+    refuseVeto: 'Refuse the veto',
+    policyPeekDone: 'Done reading',
+  },
+  winReasons: {
+    loyalDecrees: 'Five Loyal Decrees were enacted',
+    usurperExiled: 'The Usurper was exiled',
+    rebelDecrees: 'Six Rebel Decrees were enacted',
+    usurperElected: 'The Usurper was made Wazir',
+  } satisfies Record<WinReason, string>,
   attribution:
     'Diwan is adapted from Secret Hitler by Max Temkin, Mike Boxleiter, Tommy Maranges, and Mackenzie Schubert, used under CC BY-NC-SA 4.0. Diwan is free and shared under the same license.',
 } as const;

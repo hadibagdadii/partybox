@@ -1,17 +1,21 @@
 import {
+  createRng,
   createRoomSchema,
   emptySchema,
   gameActionSchema,
   joinRoomSchema,
   resumeHostSchema,
   resumePlayerSchema,
+  setGameSchema,
   type Ack,
   type AckResult,
   type ClientToServerEvents,
   type ServerToClientEvents,
 } from '@partybox/shared';
+import { randomInt } from 'node:crypto';
 import type { Server, Socket } from 'socket.io';
 import type { z } from 'zod';
+import { BotRunner } from './rooms/bot-runner.js';
 import type { RoomService } from './rooms/room-service.js';
 
 export interface SocketData {
@@ -24,8 +28,17 @@ export type IoServer = Server<ClientToServerEvents, ServerToClientEvents, object
 type IoSocket = Socket<ClientToServerEvents, ServerToClientEvents, object, SocketData>;
 
 export interface SocketOptions {
-  /** Enables dev-only events such as adding bots. */
+  /** Enables dev-only events such as adding bots, and runs the bots. */
   devTools: boolean;
+  /** Bot timing and seed; tests set the delays to 0. */
+  bots?: { minDelayMs?: number; maxDelayMs?: number; seed?: number };
+}
+
+export interface SocketHandle {
+  /** Clears pending bot timers for a room that is going away. */
+  cancelRoom(code: string): void;
+  /** Clears every pending bot timer. */
+  close(): void;
 }
 
 const hostChannel = (code: string) => `host:${code}`;
@@ -50,8 +63,22 @@ function parse<S extends z.ZodTypeAny>(schema: S, payload: unknown): z.output<S>
   return result.success ? (result.data as z.output<S>) : null;
 }
 
-export function registerSocketHandlers(io: IoServer, rooms: RoomService, options: SocketOptions) {
-  /** Hosts get the public projection; each phone gets only its own. */
+export function registerSocketHandlers(
+  io: IoServer,
+  rooms: RoomService,
+  options: SocketOptions,
+): SocketHandle {
+  const bots = options.devTools
+    ? new BotRunner({
+        rooms,
+        rng: createRng(options.bots?.seed ?? randomInt(2 ** 31)),
+        minDelayMs: options.bots?.minDelayMs,
+        maxDelayMs: options.bots?.maxDelayMs,
+        onChange: (code) => broadcast(code),
+      })
+    : null;
+
+  /** Hosts get the public projection; each phone gets only its own. Then bots get their turn. */
   const broadcast = (code: string) => {
     const hostView = rooms.hostView(code);
     if (hostView) io.to(hostChannel(code)).emit('host:view', hostView);
@@ -59,6 +86,7 @@ export function registerSocketHandlers(io: IoServer, rooms: RoomService, options
       const view = rooms.playerView(code, playerId);
       if (view) io.to(playerChannel(code, playerId)).emit('player:view', view);
     }
+    bots?.sync(code);
   };
 
   /** Marks a seat disconnected once its last socket is gone. */
@@ -79,6 +107,21 @@ export function registerSocketHandlers(io: IoServer, rooms: RoomService, options
     }
     socket.data = {};
   };
+
+  /** Runs a host-only command, then pushes fresh views on success. */
+  const asHost = (socket: IoSocket, ack: unknown, run: (code: string) => AckResult) => {
+    const reply = replier(ack);
+    const { role, code } = socket.data;
+    if (role !== 'host' || !code) return reply(notInRoom);
+    const result = run(code);
+    reply(result);
+    if (result.ok) broadcast(code);
+  };
+
+  const devOnly = {
+    ok: false,
+    error: { code: 'dev_only', message: 'That is a dev-only tool' },
+  } as const;
 
   const bindHost = (socket: IoSocket, code: string) => {
     unbind(socket);
@@ -132,6 +175,12 @@ export function registerSocketHandlers(io: IoServer, rooms: RoomService, options
       if (result.ok) broadcast(input.code);
     });
 
+    socket.on('room:setGame', (payload, ack) => {
+      const input = parse(setGameSchema, payload);
+      if (!input) return replier(ack)(invalidPayload);
+      asHost(socket, ack, (code) => rooms.setGame(code, input.gameId));
+    });
+
     socket.on('room:join', (payload, ack) => {
       const reply = replier<{ code: string; playerId: string; playerToken: string }>(ack);
       const input = parse(joinRoomSchema, payload);
@@ -182,9 +231,20 @@ export function registerSocketHandlers(io: IoServer, rooms: RoomService, options
       if (result.ok) broadcast(code);
     });
 
+    socket.on('dev:start', (payload, ack) => {
+      if (!options.devTools) return replier(ack)(devOnly);
+      if (!parse(emptySchema, payload)) return replier(ack)(invalidPayload);
+      asHost(socket, ack, (code) => rooms.devStart(code));
+    });
+
     socket.on('disconnect', () => {
       const { role, code, playerId } = socket.data;
       if (role === 'player' && code && playerId) releaseSeat(code, playerId);
     });
   });
+
+  return {
+    cancelRoom: (code) => bots?.cancel(code),
+    close: () => bots?.cancelAll(),
+  };
 }

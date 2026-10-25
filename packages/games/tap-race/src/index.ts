@@ -56,4 +56,5 @@ export const tapRaceModule: GameModule<
     youWon: state.winnerId === playerId,
   }),
   isOver: (state) => state.winnerId !== null,
+  waitingOn: (state) => (state.winnerId ? [] : state.players.map((p) => p.id)),
 };

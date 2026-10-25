@@ -1,4 +1,6 @@
+import type { DiwanAction } from './actions.js';
 import type { DecreeId, PowerId, RoleId, TeamId, VoteId } from './ids.js';
+import { legalActions, waitingOn } from './legal.js';
 import { eligibleWazirIds, livingPlayers, powerTargetIds } from './reduce.js';
 import { LEGISLATIVE_DRAW, VETO_UNLOCK, powerTrack, teamOf, usurperSeesRebels } from './rules.js';
 import type { DiwanState, LogEntry, Phase, Secret, Winner } from './state.js';
@@ -6,6 +8,10 @@ import type { DiwanState, LogEntry, Phase, Secret, Winner } from './state.js';
 export interface DiwanHostView {
   phase: Phase;
   players: { id: string; name: string; alive: boolean }[];
+  /** Filled only during the role reveal: who has seen their role. */
+  acknowledgedIds: string[];
+  /** Players the game is waiting on. */
+  waitingOn: string[];
   ameerId: string;
   nomineeId: string | null;
   lastElected: { ameerId: string; wazirId: string } | null;
@@ -40,6 +46,8 @@ export interface DiwanPlayerView extends DiwanHostView {
   secrets: Secret[];
   /** The top of the deck while you resolve Read the Scrolls. */
   peek: DecreeId[] | null;
+  /** Every action you may send right now. */
+  legalActions: DiwanAction[];
 }
 
 export function getHostView(s: DiwanState): DiwanHostView {
@@ -47,6 +55,8 @@ export function getHostView(s: DiwanState): DiwanHostView {
   return {
     phase: s.phase,
     players: s.players.map((p) => ({ id: p.id, name: p.name, alive: p.alive })),
+    acknowledgedIds: s.phase === 'reveal' ? [...s.acknowledgedIds] : [],
+    waitingOn: waitingOn(s),
     ameerId: s.ameerId,
     nomineeId: s.nomineeId,
     lastElected: s.lastElected && { ...s.lastElected },
@@ -84,6 +94,7 @@ export function getPlayerView(s: DiwanState, playerId: string): DiwanPlayerView 
       myVote: null,
       secrets: [],
       peek: null,
+      legalActions: [],
     };
   }
 
@@ -100,6 +111,7 @@ export function getPlayerView(s: DiwanState, playerId: string): DiwanPlayerView 
     myVote: s.phase === 'vote' ? (s.votes[me.id] ?? null) : null,
     secrets: (s.secrets[me.id] ?? []).map((x) => ({ ...x })),
     peek: peeking ? s.draw.slice(0, LEGISLATIVE_DRAW) : null,
+    legalActions: legalActions(s, me.id),
   };
 }
 

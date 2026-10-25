@@ -81,6 +81,16 @@ export function reduce(
 function handle(ctx: Ctx, actorId: string, action: DiwanAction): GameError | null {
   const { s } = ctx;
   switch (action.type) {
+    case 'acknowledge': {
+      if (s.phase !== 'reveal') return err('wrong_phase', 'Roles have already been revealed');
+      if (s.acknowledgedIds.includes(actorId)) {
+        return err('invalid_action', 'You have already seen your role');
+      }
+      s.acknowledgedIds.push(actorId);
+      if (s.players.every((p) => s.acknowledgedIds.includes(p.id))) s.phase = 'nominate';
+      return null;
+    }
+
     case 'nominate': {
       if (s.phase !== 'nominate') return err('wrong_phase', 'Not time to nominate');
       if (actorId !== s.ameerId) return err('not_your_turn', 'Only the Ameer nominates');
@@ -344,6 +354,7 @@ function cloneState(s: DiwanState): DiwanState {
   return {
     ...s,
     players: s.players.map((p) => ({ ...p })),
+    acknowledgedIds: [...s.acknowledgedIds],
     lastElected: s.lastElected && { ...s.lastElected },
     votes: { ...s.votes },
     draw: [...s.draw],

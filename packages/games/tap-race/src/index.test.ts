@@ -45,4 +45,10 @@ describe('tapRaceModule', () => {
     expect(game.actionSchema.safeParse({ type: 'tap' }).success).toBe(true);
     expect(game.actionSchema.safeParse({ type: 'win' }).success).toBe(false);
   });
+
+  it('waits on every player until someone taps', () => {
+    const start = game.createInitialState(players, rng);
+    expect(game.waitingOn?.(start)).toEqual(players.map((p) => p.id));
+    expect(game.waitingOn?.({ players, winnerId: 'a' })).toEqual([]);
+  });
 });

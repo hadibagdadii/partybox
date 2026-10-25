@@ -1,4 +1,4 @@
-import type { HostViewMessage, LobbyView } from '@partybox/shared';
+import type { AckResult, GameOption, HostViewMessage, LobbyView } from '@partybox/shared';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { gameScreens } from '../games/registry';
 import { getSocket, useConnected, useOnConnect } from '../lib/socket';
@@ -75,12 +75,13 @@ export function Host() {
         <p className="absolute top-6 rounded-full bg-red-900 px-6 py-2 text-xl">Reconnecting…</p>
       )}
       {view.room.phase === 'lobby' || !GameHost ? (
-        <Lobby room={view.room} />
+        <Lobby room={view.room} games={view.games} />
       ) : (
         <>
           <p className="absolute right-8 top-6 text-3xl font-bold tracking-widest text-slate-500">
             {view.room.code}
           </p>
+          <WaitingOn room={view.room} ids={view.waitingOn} />
           <GameHost room={view.room} game={view.game} />
         </>
       )}
@@ -108,16 +109,49 @@ function joinUrl(code: string): string {
   return `${base.replace(/\/$/, '')}/play?code=${code}`;
 }
 
-function Lobby({ room }: { room: LobbyView }) {
+/** Who the game is waiting on, flagging anyone whose phone has dropped. */
+function WaitingOn({ room, ids }: { room: LobbyView; ids: string[] }) {
+  if (ids.length === 0) return null;
+  const waiting = room.players.filter((p) => ids.includes(p.id));
+  return (
+    <div className="flex flex-col items-center gap-2 text-2xl">
+      <p className="text-slate-400">Waiting on</p>
+      <ul className="flex flex-wrap justify-center gap-3">
+        {waiting.map((p) => (
+          <li key={p.id} className="rounded-xl bg-slate-800 px-4 py-1">
+            {p.name}
+            {!p.connected && (
+              <span className="ml-2 rounded bg-red-900 px-2 text-base text-red-100">
+                disconnected
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function Lobby({ room, games }: { room: LobbyView; games: GameOption[] }) {
   const socket = getSocket();
   const [botError, setBotError] = useState<string | null>(null);
   const missing = room.minPlayers - room.players.length;
 
+  const report = (result: AckResult<object>) => {
+    if (!result.ok) setBotError(result.error.message);
+  };
   const addBot = () => {
     setBotError(null);
-    socket.emit('dev:addBot', {}, (result) => {
-      if (!result.ok) setBotError(result.error.message);
-    });
+    socket.emit('dev:addBot', {}, report);
+  };
+  const devStart = () => {
+    setBotError(null);
+    socket.emit('dev:start', {}, report);
+  };
+
+  const pickGame = (gameId: string) => {
+    setBotError(null);
+    socket.emit('room:setGame', { gameId }, report);
   };
 
   return (
@@ -132,6 +166,24 @@ function Lobby({ room }: { room: LobbyView }) {
       >
         {room.code}
       </p>
+      {games.length > 1 && (
+        <div role="radiogroup" aria-label="Game" className="flex gap-3">
+          {games.map((g) => (
+            <button
+              key={g.id}
+              type="button"
+              role="radio"
+              aria-checked={g.id === room.gameId}
+              onClick={() => pickGame(g.id)}
+              className={`rounded-xl px-5 py-2 text-2xl ${
+                g.id === room.gameId ? 'bg-amber-500 text-slate-950' : 'bg-slate-800'
+              }`}
+            >
+              {g.name}
+            </button>
+          ))}
+        </div>
+      )}
       <p className="text-3xl text-slate-400">
         {room.gameName} · {room.players.length}/{room.maxPlayers} players
         {missing > 0 ? ` · need ${missing} more` : ' · waiting for the VIP to start'}
@@ -161,6 +213,14 @@ function Lobby({ room }: { room: LobbyView }) {
             className="rounded-xl border border-dashed border-slate-600 px-5 py-2 text-xl text-slate-400"
           >
             Add bot (dev)
+          </button>
+          <button
+            type="button"
+            onClick={devStart}
+            disabled={missing > 0}
+            className="rounded-xl border border-dashed border-slate-600 px-5 py-2 text-xl text-slate-400 disabled:opacity-40"
+          >
+            Start (dev)
           </button>
           <a
             href={`/dev?code=${room.code}`}

@@ -4,6 +4,7 @@ import { VOTE_IDS } from './ids.js';
 const targetId = z.string().min(1).max(64);
 
 export const actionSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('acknowledge') }),
   z.object({ type: z.literal('nominate'), targetId }),
   z.object({ type: z.literal('vote'), vote: z.enum(VOTE_IDS) }),
   z.object({ type: z.literal('ameerDiscard'), index: z.number().int().min(0).max(2) }),

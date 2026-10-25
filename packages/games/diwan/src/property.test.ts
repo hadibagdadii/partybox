@@ -3,64 +3,21 @@ import { describe, expect, it } from 'vitest';
 import type { DiwanAction } from './actions.js';
 import { diwanModule as game } from './index.js';
 import type { RoleId } from './ids.js';
-import { eligibleWazirIds, powerTargetIds } from './reduce.js';
-import { DECK_COMPOSITION, VETO_UNLOCK } from './rules.js';
+import { legalActions, waitingOn } from './legal.js';
+import { DECK_COMPOSITION } from './rules.js';
 import type { DiwanState } from './state.js';
 
 type Move = { playerId: string; action: DiwanAction };
 
-/** Every legal move from `s`, including vote changes before the reveal. */
+/** Every legal move from `s`, across all players. */
 function legalMoves(s: DiwanState): Move[] {
-  const ameer = s.ameerId;
-  const wazir = s.nomineeId as string;
-  switch (s.phase) {
-    case 'nominate':
-      return eligibleWazirIds(s).map((targetId) => ({
-        playerId: ameer,
-        action: { type: 'nominate', targetId },
-      }));
-    case 'vote':
-      return s.players
-        .filter((p) => p.alive)
-        .flatMap((p) =>
-          (['yes', 'no'] as const).map((vote) => ({
-            playerId: p.id,
-            action: { type: 'vote', vote } as const,
-          })),
-        );
-    case 'ameerDiscard':
-      return [0, 1, 2].map((index) => ({
-        playerId: ameer,
-        action: { type: 'ameerDiscard', index },
-      }));
-    case 'wazirEnact': {
-      const moves: Move[] = [0, 1].map((index) => ({
-        playerId: wazir,
-        action: { type: 'wazirEnact', index },
-      }));
-      if (s.enacted.rebel >= VETO_UNLOCK && !s.vetoRefused) {
-        moves.push({ playerId: wazir, action: { type: 'proposeVeto' } });
-      }
-      return moves;
-    }
-    case 'vetoPending':
-      return [true, false].map((accept) => ({
-        playerId: ameer,
-        action: { type: 'answerVeto', accept },
-      }));
-    case 'power': {
-      const power = s.pendingPower;
-      if (power === 'policyPeek') return [{ playerId: ameer, action: { type: 'policyPeekDone' } }];
-      if (!power) return [];
-      return powerTargetIds(s).map((targetId) => ({
-        playerId: ameer,
-        action: { type: power, targetId },
-      }));
-    }
-    case 'over':
-      return [];
-  }
+  return s.players.flatMap((p) =>
+    legalActions(s, p.id).map((action) => ({ playerId: p.id, action })),
+  );
 }
+
+/** 200 games by default; `PROPERTY_RUNS=1000 pnpm test` (or `pnpm test:full`) for more. */
+const RUNS = Number(process.env.PROPERTY_RUNS ?? 200);
 
 function expectedKnown(s: DiwanState, playerId: string): Record<string, RoleId> {
   const me = s.players.find((p) => p.id === playerId)!;
@@ -98,7 +55,7 @@ function cardsConserved(s: DiwanState): boolean {
   return loyal === DECK_COMPOSITION.loyal && rebel === DECK_COMPOSITION.rebel;
 }
 
-/** Plain checks rather than `expect` in the hot loop keep 1,000 games fast. */
+/** Plain checks rather than `expect` in the hot loop keep thousands of games fast. */
 function check(ok: boolean, seed: number, what: string): void {
   if (!ok) throw new Error(`seed ${seed}: ${what}`);
 }
@@ -124,6 +81,17 @@ function playRandomGame(seed: number): DiwanState {
       check(sameRoles(known, expectedKnown(s, p.id)), seed, `${p.id} knows the wrong roles`);
     }
 
+    const waiting = waitingOn(s);
+    check(waiting.length > 0, seed, `waiting on nobody in ${s.phase}`);
+    for (const id of waiting) {
+      check(legalActions(s, id).length > 0, seed, `${id} is waited on but cannot act`);
+    }
+    check(
+      host.waitingOn.length === waiting.length,
+      seed,
+      'host view disagrees about who the game waits on',
+    );
+
     const moves = legalMoves(s);
     check(moves.length > 0, seed, `no legal moves in ${s.phase}`);
     const move = moves[picker.int(moves.length)]!;
@@ -137,10 +105,10 @@ function playRandomGame(seed: number): DiwanState {
 }
 
 describe('random games', () => {
-  it('1,000 seeded games all finish with a winner and never leak to the host', () => {
+  it(`${RUNS} seeded games all finish with a winner and never leak to the host`, () => {
     const winners = { loyal: 0, rebel: 0 };
     const reasons = new Set<string>();
-    for (let seed = 1; seed <= 1000; seed++) {
+    for (let seed = 1; seed <= RUNS; seed++) {
       const end = playRandomGame(seed);
       expect(game.isOver(end), `seed ${seed} did not finish`).toBe(true);
       expect(end.winner).not.toBeNull();

@@ -1,79 +1,22 @@
-import type {
-  ClientToServerEvents,
-  HostViewMessage,
-  PlayerViewMessage,
-  ServerToClientEvents,
-} from '@partybox/shared';
-import { createServer, type Server as HttpServer } from 'node:http';
-import type { AddressInfo } from 'node:net';
-import { Server } from 'socket.io';
-import { io as connect, type Socket as ClientSocket } from 'socket.io-client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { DEFAULT_GAME_ID, gameRegistry } from './games.js';
-import { RoomService } from './rooms/room-service.js';
-import { MemoryRoomStore } from './rooms/room-store.js';
-import { registerSocketHandlers, type IoServer } from './socket.js';
+import { ok, record, startTestServer, until, type TestServer } from './test-support.js';
 
-type Client = ClientSocket<ServerToClientEvents, ClientToServerEvents>;
-
-let httpServer: HttpServer;
-let io: IoServer;
-let url: string;
-const clients: Client[] = [];
+let server: TestServer;
+const client = () => server.client();
 
 beforeEach(async () => {
-  httpServer = createServer();
-  io = new Server(httpServer);
-  const rooms = new RoomService({
-    store: new MemoryRoomStore(),
-    games: gameRegistry,
-    defaultGameId: DEFAULT_GAME_ID,
-  });
-  registerSocketHandlers(io, rooms, { devTools: true });
-  await new Promise<void>((resolve) => httpServer.listen(0, resolve));
-  url = `http://localhost:${(httpServer.address() as AddressInfo).port}`;
+  server = await startTestServer();
 });
 
 afterEach(async () => {
-  for (const c of clients.splice(0)) c.disconnect();
-  await io.close();
+  await server.close();
 });
-
-async function client(): Promise<Client> {
-  const socket: Client = connect(url, { transports: ['websocket'], forceNew: true });
-  clients.push(socket);
-  await new Promise<void>((resolve) => socket.on('connect', resolve));
-  return socket;
-}
-
-/** Records every message of each kind a socket receives. */
-function record(socket: Client) {
-  const host: HostViewMessage[] = [];
-  const player: PlayerViewMessage[] = [];
-  socket.on('host:view', (v) => host.push(v));
-  socket.on('player:view', (v) => player.push(v));
-  return { host, player };
-}
-
-async function until(check: () => boolean, timeoutMs = 2000) {
-  const start = Date.now();
-  while (!check()) {
-    if (Date.now() - start > timeoutMs) throw new Error('Timed out waiting for condition');
-    await new Promise((r) => setTimeout(r, 10));
-  }
-}
-
-async function ok<T>(promise: Promise<T>): Promise<Extract<T, { ok: true }>> {
-  const result = await promise;
-  if (!(result as { ok: boolean }).ok) throw new Error(JSON.stringify(result));
-  return result as Extract<T, { ok: true }>;
-}
 
 describe('socket room flow', () => {
   it('sends hosts only host views and players only their own view', async () => {
     const tv = await client();
     const tvLog = record(tv);
-    const { code } = await ok(tv.emitWithAck('room:create', {}));
+    const { code } = await ok(tv.emitWithAck('room:create', { gameId: 'tap-race' }));
 
     const amina = await client();
     const aminaLog = record(amina);

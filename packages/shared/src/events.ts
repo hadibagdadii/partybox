@@ -23,6 +23,9 @@ const tokenSchema = z.string().uuid();
 export const createRoomSchema = z.object({ gameId: z.string().min(1).max(40).optional() });
 export type CreateRoomPayload = z.input<typeof createRoomSchema>;
 
+export const setGameSchema = z.object({ gameId: z.string().min(1).max(40) });
+export type SetGamePayload = z.input<typeof setGameSchema>;
+
 export const joinRoomSchema = z.object({ code: roomCodeSchema, name: playerNameSchema });
 export type JoinRoomPayload = z.input<typeof joinRoomSchema>;
 
@@ -86,8 +89,17 @@ export interface LobbyView {
   players: LobbyPlayer[];
 }
 
+export interface GameOption {
+  id: string;
+  name: string;
+}
+
 export interface HostViewMessage {
   room: LobbyView;
+  /** Games this room can switch to while in the lobby. */
+  games: GameOption[];
+  /** Ids of players the game is waiting on; empty in the lobby. */
+  waitingOn: string[];
   /** The game's host projection, or null in the lobby. */
   game: unknown;
 }
@@ -107,6 +119,7 @@ export interface ClientToServerEvents {
     ack: Ack<{ code: string; hostToken: string }>,
   ) => void;
   'host:resume': (payload: ResumeHostPayload, ack: Ack) => void;
+  'room:setGame': (payload: SetGamePayload, ack: Ack) => void;
   'room:join': (
     payload: JoinRoomPayload,
     ack: Ack<{ code: string; playerId: string; playerToken: string }>,
@@ -116,6 +129,8 @@ export interface ClientToServerEvents {
   'game:action': (payload: GameActionPayload, ack: Ack) => void;
   'game:reset': (payload: EmptyPayload, ack: Ack) => void;
   'dev:addBot': (payload: EmptyPayload, ack: Ack<{ playerId: string }>) => void;
+  /** Starts the game from the host screen, so an all-bot room can play. */
+  'dev:start': (payload: EmptyPayload, ack: Ack) => void;
 }
 
 export interface ServerToClientEvents {
