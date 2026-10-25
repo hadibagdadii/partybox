@@ -1,7 +1,7 @@
 import { createRng } from '@partybox/shared';
 import { describe, expect, it } from 'vitest';
 import { diwanModule } from './index.js';
-import { DECREE_IDS, OFFICE_IDS, ROLE_IDS, TEAM_IDS } from './ids.js';
+import { DECREE_IDS, OFFICE_IDS, POWER_IDS, ROLE_IDS, TEAM_IDS, VOTE_IDS } from './ids.js';
 import { theme } from './theme.js';
 
 describe('theme', () => {
@@ -10,6 +10,11 @@ describe('theme', () => {
     for (const id of ROLE_IDS) expect(theme.roles[id]).toBeTruthy();
     for (const id of OFFICE_IDS) expect(theme.offices[id]).toBeTruthy();
     for (const id of DECREE_IDS) expect(theme.decrees[id]).toBeTruthy();
+    for (const id of POWER_IDS) expect(theme.powers[id]).toBeTruthy();
+    for (const id of VOTE_IDS) {
+      expect(theme.votes[id].label).toBeTruthy();
+      expect(theme.votes[id].subtitle).toBeTruthy();
+    }
   });
 
   it('credits the original authors', () => {
