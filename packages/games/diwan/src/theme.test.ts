@@ -15,6 +15,23 @@ describe('theme', () => {
     }
   });
 
+  it('has phone copy for every phase and targeted power', () => {
+    for (const phase of Object.keys(theme.phases) as (keyof typeof theme.phases)[]) {
+      expect(theme.phone.waiting[phase]('A')).toBeTruthy();
+    }
+    expect(theme.phone.powerHints.investigate).toBeTruthy();
+    expect(theme.phone.powerHints.specialElection).toBeTruthy();
+    expect(theme.phone.powerHints.execution).toBeTruthy();
+  });
+
+  it('writes log entries as sentences', () => {
+    expect(theme.log.nominated('Amina', 'Yusuf')).toBe(
+      `Amina nominated Yusuf as ${theme.offices.wazir}.`,
+    );
+    expect(theme.log.powerUsed('Amina', theme.powers.execution, 'Yusuf')).toMatch(/\.$/);
+    expect(theme.log.powerUsed('Amina', theme.powers.policyPeek, null)).toMatch(/\.$/);
+  });
+
   it('credits the original authors', () => {
     expect(theme.attribution).toContain('Secret Hitler');
     expect(theme.attribution).toContain('CC BY-NC-SA 4.0');

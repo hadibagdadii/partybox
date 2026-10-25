@@ -12,7 +12,13 @@ export { theme } from './theme.js';
 export { actionSchema, type DiwanAction } from './actions.js';
 export { eligibleWazirIds, powerTargetIds } from './reduce.js';
 export { legalActions, waitingOn } from './legal.js';
-export { LOYAL_DECREES_TO_WIN, REBEL_DECREES_TO_WIN, UNREST_LIMIT, powerTrack } from './rules.js';
+export {
+  LOYAL_DECREES_TO_WIN,
+  REBEL_DECREES_TO_WIN,
+  UNREST_LIMIT,
+  powerTrack,
+  teamOf,
+} from './rules.js';
 export type * from './state.js';
 export type { DiwanHostView, DiwanPlayerView } from './views.js';
 

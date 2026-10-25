@@ -7,37 +7,48 @@ export function nameLookup(players: { id: string; name: string }[]): Names {
   return (id) => (id ? (byId.get(id) ?? '?') : '-');
 }
 
-/** One public log entry as plain text, with every themed word from theme.ts. */
+/** Joins names as plain English: "A", "A and B", "A, B and C". */
+export function listNames(names: string[]): string {
+  if (names.length <= 1) return names[0] ?? '';
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
+/** One public log entry as a plain sentence, with every themed word from theme.ts. */
 export function formatLog(entry: LogEntry, name: Names): string {
-  const { offices, decrees, powers, votes } = theme;
+  const { log, decrees, powers } = theme;
   switch (entry.type) {
     case 'nominated':
-      return `${offices.ameer} ${name(entry.ameerId)} nominated ${name(entry.wazirId)} as ${offices.wazir}`;
+      return log.nominated(name(entry.ameerId), name(entry.wazirId));
     case 'votesRevealed': {
       const by = (v: 'yes' | 'no') =>
-        Object.entries(entry.votes)
-          .filter(([, vote]) => vote === v)
-          .map(([id]) => name(id))
-          .join(', ') || '-';
-      return `Vote ${entry.passed ? 'passed' : 'failed'} · ${votes.yes.label}: ${by('yes')} · ${votes.no.label}: ${by('no')}`;
+        listNames(
+          Object.entries(entry.votes)
+            .filter(([, vote]) => vote === v)
+            .map(([id]) => name(id)),
+        ) || log.nobody;
+      return log.votesRevealed(entry.passed, by('yes'), by('no'));
     }
     case 'unrest':
-      return `${theme.electionTracker} rises to ${entry.level}`;
+      return log.unrest(entry.level);
     case 'riot':
-      return `${theme.chaos}! ${decrees[entry.decree]} enacted`;
+      return log.riot(decrees[entry.decree]);
     case 'enacted':
-      return `${name(entry.ameerId)} and ${name(entry.wazirId)} enacted a ${decrees[entry.decree]}`;
+      return log.enacted(name(entry.ameerId), name(entry.wazirId), decrees[entry.decree]);
     case 'reshuffled':
-      return `Deck reshuffled (${entry.drawCount} cards)`;
+      return log.reshuffled(entry.drawCount);
     case 'vetoProposed':
-      return `${offices.wazir} ${name(entry.wazirId)} proposed a ${theme.veto}`;
+      return log.vetoProposed(name(entry.wazirId));
     case 'vetoAnswered':
-      return `${offices.ameer} ${name(entry.ameerId)} ${entry.accept ? 'accepted' : 'refused'} the ${theme.veto}`;
+      return log.vetoAnswered(name(entry.ameerId), entry.accept);
     case 'powerUsed':
-      return `${name(entry.ameerId)} used ${powers[entry.power]}${entry.targetId ? ` on ${name(entry.targetId)}` : ''}`;
+      return log.powerUsed(
+        name(entry.ameerId),
+        powers[entry.power],
+        entry.targetId ? name(entry.targetId) : null,
+      );
     case 'exiled':
-      return `${name(entry.targetId)} is gone (${powers.execution})`;
+      return log.exiled(name(entry.targetId));
     case 'gameOver':
-      return `${theme.teams[entry.winner]} win: ${theme.winReasons[entry.reason]}`;
+      return log.gameOver(theme.teams[entry.winner], theme.winReasons[entry.reason]);
   }
 }

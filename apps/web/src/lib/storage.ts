@@ -62,3 +62,12 @@ export const hostSession = {
   set: (session: HostSession) => write(HOST_KEY, JSON.stringify(session)),
   clear: () => remove(HOST_KEY),
 };
+
+/** How many of this seat's secrets the player has already dismissed. */
+export const seenSecrets = {
+  get(seatKey: string): number {
+    const n = Number(read(`${seatKey}:seen`));
+    return Number.isInteger(n) && n > 0 ? n : 0;
+  },
+  set: (seatKey: string, count: number) => write(`${seatKey}:seen`, String(count)),
+};

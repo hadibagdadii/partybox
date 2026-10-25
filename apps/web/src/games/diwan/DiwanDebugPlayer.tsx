@@ -9,7 +9,7 @@ type TargetType = TargetAction['type'];
 const isTargeted = (a: DiwanAction): a is TargetAction => 'targetId' in a;
 
 /** Debug phone screen: everything this player may know, and one button per legal action. */
-export function DiwanPlayer({ game, act }: PlayerScreenProps) {
+export function DiwanDebugPlayer({ game, act }: PlayerScreenProps) {
   const view = game as DiwanPlayerView;
   const name = nameLookup(view.players);
   const { you } = view;
