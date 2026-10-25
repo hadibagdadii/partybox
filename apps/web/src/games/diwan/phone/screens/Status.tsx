@@ -1,4 +1,5 @@
 import { teamOf, theme } from '@partybox/diwan';
+import { Link } from 'react-router-dom';
 import { listNames } from '../../format';
 import { Rosette12, Star8 } from '../../ornaments';
 import { CourtRecord } from '../../ui/CourtRecord';
@@ -59,10 +60,27 @@ export function GameOverScreen({
   view,
   name,
   reset,
-}: Pick<ScreenProps, 'view' | 'name'> & { reset: (() => void) | null }) {
+  playAgain,
+}: Pick<ScreenProps, 'view' | 'name'> & {
+  reset: (() => void) | null;
+  playAgain: (() => void) | null;
+}) {
   const { winner, roles } = view;
   return (
-    <Frame actions={reset && <Button onClick={reset}>{theme.phone.backToLobby}</Button>}>
+    <Frame
+      actions={
+        (reset || playAgain) && (
+          <>
+            {playAgain && <Button onClick={playAgain}>{theme.phone.playAgain}</Button>}
+            {reset && (
+              <Button variant="secondary" onClick={reset}>
+                {theme.phone.backToLobby}
+              </Button>
+            )}
+          </>
+        )
+      }
+    >
       {winner && (
         <header className="flex flex-col items-center gap-3 text-center">
           <TeamMark team={winner.team} size={64} />
@@ -107,6 +125,12 @@ export function GameOverScreen({
           </ul>
         </section>
       )}
+      <Link
+        to="/about"
+        className="mx-auto flex min-h-tap-min items-center px-4 text-lg text-court-mist underline"
+      >
+        {theme.phone.about}
+      </Link>
     </Frame>
   );
 }

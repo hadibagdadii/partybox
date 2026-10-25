@@ -13,11 +13,14 @@ export function Landing() {
         </Link>
         <Link
           to="/host"
-          className="rounded-2xl border border-slate-600 px-6 py-5 text-center text-xl font-semibold"
+          className="rounded-2xl border border-slate-500 px-6 py-5 text-center text-xl font-semibold"
         >
           Host on this screen
         </Link>
       </div>
+      <Link to="/about" className="text-lg text-slate-300 underline">
+        About
+      </Link>
     </main>
   );
 }

@@ -63,7 +63,9 @@ export function fixtureRoom(view: DiwanHostView, awayIds: string[] = []): LobbyV
       isVip: i === 0,
       isBot: false,
       connected: !awayIds.includes(p.id),
+      awayLong: false,
     })),
+    tutorial: null,
   };
 }
 

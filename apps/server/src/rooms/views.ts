@@ -5,9 +5,9 @@ import type {
   LobbyView,
   PlayerViewMessage,
 } from '@partybox/shared';
-import type { Room } from './room.js';
+import { AWAY_LONG_MS, type Room } from './room.js';
 
-export function buildLobbyView(room: Room, game: AnyGameModule): LobbyView {
+export function buildLobbyView(room: Room, game: AnyGameModule, now: number): LobbyView {
   return {
     code: room.code,
     gameId: game.id,
@@ -22,7 +22,12 @@ export function buildLobbyView(room: Room, game: AnyGameModule): LobbyView {
       isVip: s.id === room.vipId,
       isBot: s.isBot,
       connected: s.connected,
+      awayLong: s.disconnectedAt !== null && now - s.disconnectedAt >= AWAY_LONG_MS,
     })),
+    tutorial:
+      room.tutorial !== null && game.tutorialSlides
+        ? { slide: room.tutorial, total: game.tutorialSlides }
+        : null,
   };
 }
 
@@ -31,9 +36,10 @@ export function buildHostView(
   room: Room,
   game: AnyGameModule,
   games: GameOption[],
+  now: number,
 ): HostViewMessage {
   return {
-    room: buildLobbyView(room, game),
+    room: buildLobbyView(room, game, now),
     games,
     waitingOn: room.game && game.waitingOn ? game.waitingOn(room.game.state) : [],
     game: room.game ? game.getHostView(room.game.state) : null,
@@ -44,12 +50,13 @@ export function buildPlayerView(
   room: Room,
   game: AnyGameModule,
   playerId: string,
+  now: number,
 ): PlayerViewMessage | null {
   const seat = room.seats.find((s) => s.id === playerId);
   if (!seat) return null;
   const isVip = seat.id === room.vipId;
   return {
-    room: buildLobbyView(room, game),
+    room: buildLobbyView(room, game, now),
     you: { id: seat.id, name: seat.name, isVip },
     canStart: isVip && room.phase === 'lobby' && room.seats.length >= game.minPlayers,
     game: room.game ? game.getPlayerView(room.game.state, playerId) : null,

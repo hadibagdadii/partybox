@@ -135,7 +135,7 @@ function VoteFace({ vote }: { vote: VoteId }) {
       }`}
     >
       <span className="font-display text-tv-md leading-none">{theme.votes[vote].label}</span>
-      <span className="text-tv-sm leading-none opacity-80">{theme.votes[vote].subtitle}</span>
+      <span className="text-tv-sm leading-none">{theme.votes[vote].subtitle}</span>
     </div>
   );
 }

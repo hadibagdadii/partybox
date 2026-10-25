@@ -8,7 +8,7 @@ export function VoteScreen({ view, name, act, busy }: ScreenProps) {
   const options = actionsOf(view, 'vote');
   const mine = view.myVote;
   const styles: Record<VoteId, string> = {
-    yes: 'from-court-emeraldLight to-court-emerald',
+    yes: 'from-court-emerald to-court-emeraldDeep',
     no: 'from-court-indigoLight to-court-indigo',
   };
   return (

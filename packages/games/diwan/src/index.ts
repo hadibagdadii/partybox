@@ -4,11 +4,12 @@ import { legalActions, waitingOn } from './legal.js';
 import { reduce } from './reduce.js';
 import { MAX_PLAYERS, MIN_PLAYERS } from './rules.js';
 import { createInitialState } from './setup.js';
+import { theme } from './theme.js';
 import type { DiwanState, LogEntry } from './state.js';
 import { getHostView, getPlayerView, type DiwanHostView, type DiwanPlayerView } from './views.js';
 
 export * from './ids.js';
-export { theme } from './theme.js';
+export { theme, type TutorialSlide } from './theme.js';
 export { actionSchema, type DiwanAction } from './actions.js';
 export { eligibleWazirIds, powerTargetIds } from './reduce.js';
 export { legalActions, waitingOn } from './legal.js';
@@ -36,6 +37,7 @@ export const diwanModule: GameModule<
   displayName: 'Diwan',
   minPlayers: MIN_PLAYERS,
   maxPlayers: MAX_PLAYERS,
+  tutorialSlides: theme.tutorial.slides.length,
   actionSchema,
   createInitialState,
   reduce,

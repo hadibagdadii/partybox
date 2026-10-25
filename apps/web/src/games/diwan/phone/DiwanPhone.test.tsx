@@ -1,8 +1,10 @@
 import { theme, type DiwanAction, type DiwanPlayerView } from '@partybox/diwan';
 import type { LobbyView } from '@partybox/shared';
 import { act as flush, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DiwanPhone } from './DiwanPhone';
+import { DiwanLobby } from './screens/DiwanLobby';
 import { scenarios, type ScenarioId } from './fixtures';
 
 const room: LobbyView = {
@@ -13,6 +15,7 @@ const room: LobbyView = {
   maxPlayers: 10,
   phase: 'playing',
   players: [],
+  tutorial: null,
 };
 
 let seat = 0;
@@ -27,9 +30,10 @@ function renderPhone(view: DiwanPlayerView) {
       act={act}
       seatKey={seatKey}
       reset={null}
+      playAgain={null}
     />
   );
-  const result = render(ui(view));
+  const result = render(ui(view), { wrapper: MemoryRouter });
   return { act, rerender: (v: DiwanPlayerView) => result.rerender(ui(v)) };
 }
 
@@ -208,5 +212,89 @@ describe('court strip', () => {
     renderPhone(scenarios.waiting);
     fireEvent.click(screen.getByTestId('court-strip'));
     expect(screen.getByRole('dialog', { name: theme.phone.courtRecord })).toBeTruthy();
+  });
+});
+
+describe('rules', () => {
+  it('shows a scrollable summary of the seven topics in the court record sheet', () => {
+    renderPhone(scenarios.vote);
+    fireEvent.click(button(theme.phone.courtRecord));
+    fireEvent.click(screen.getByRole('tab', { name: theme.phone.rulesTab }));
+    const sheet = screen.getByRole('dialog', { name: theme.rules.title });
+    const topics = within(sheet).getAllByRole('listitem');
+    expect(topics).toHaveLength(7);
+    for (const slide of theme.tutorial.slides)
+      expect(within(sheet).getByText(slide.body)).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: theme.phone.recordTab }));
+    expect(screen.getByRole('dialog', { name: theme.phone.courtRecord })).toBeTruthy();
+  });
+});
+
+describe('game over', () => {
+  function renderOver(vip: boolean) {
+    const reset = vi.fn();
+    const playAgain = vi.fn();
+    render(
+      <DiwanPhone
+        room={{ ...room, phase: 'over' }}
+        you={{ id: 'p1', name: 'Amina', isVip: vip }}
+        game={scenarios.gameOver}
+        act={async () => undefined}
+        seatKey="test:over"
+        reset={vip ? reset : null}
+        playAgain={vip ? playAgain : null}
+      />,
+      { wrapper: MemoryRouter },
+    );
+    return { reset, playAgain };
+  }
+
+  it('gives the VIP Play again and Back to lobby, and everyone an About link', () => {
+    const { reset, playAgain } = renderOver(true);
+    fireEvent.click(button(theme.phone.playAgain));
+    fireEvent.click(button(theme.phone.backToLobby));
+    expect(playAgain).toHaveBeenCalledOnce();
+    expect(reset).toHaveBeenCalledOnce();
+    expect(screen.getByRole('link', { name: theme.phone.about }).getAttribute('href')).toBe(
+      '/about',
+    );
+  });
+
+  it('gives other players only the About link', () => {
+    renderOver(false);
+    expect(screen.queryByRole('button', { name: theme.phone.playAgain })).toBeNull();
+    expect(screen.getByRole('link', { name: theme.phone.about })).toBeTruthy();
+  });
+});
+
+describe('lobby', () => {
+  function renderLobby(canStart: boolean) {
+    const fns = { start: vi.fn(), startTutorial: vi.fn(), leave: vi.fn() };
+    render(
+      <DiwanLobby
+        room={{ ...room, phase: 'lobby' }}
+        you={{ id: 'p1', name: 'Amina', isVip: canStart }}
+        canStart={canStart}
+        {...fns}
+      />,
+    );
+    return fns;
+  }
+
+  it('offers the VIP the tutorial or starting now', () => {
+    const { start, startTutorial } = renderLobby(true);
+    fireEvent.click(button(theme.tutorial.startWith));
+    fireEvent.click(button(theme.tutorial.startNow));
+    expect(startTutorial).toHaveBeenCalledOnce();
+    expect(start).toHaveBeenCalledOnce();
+  });
+
+  it('asks before leaving the room', () => {
+    const { leave } = renderLobby(false);
+    expect(screen.queryByRole('button', { name: theme.tutorial.startWith })).toBeNull();
+    fireEvent.click(button(theme.phone.leaveRoom));
+    expect(leave).not.toHaveBeenCalled();
+    fireEvent.click(button(theme.phone.leaveYes));
+    expect(leave).toHaveBeenCalledOnce();
   });
 });

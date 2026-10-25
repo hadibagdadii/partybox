@@ -1,4 +1,5 @@
 import { Route, Routes } from 'react-router-dom';
+import { About } from './routes/About';
 import { Dev } from './routes/Dev';
 import { DevDiwan } from './routes/DevDiwan';
 import { DevDiwanHost } from './routes/DevDiwanHost';
@@ -12,6 +13,7 @@ export function AppRoutes() {
       <Route path="/" element={<Landing />} />
       <Route path="/host" element={<Host />} />
       <Route path="/play" element={<Play />} />
+      <Route path="/about" element={<About />} />
       {import.meta.env.DEV && <Route path="/dev" element={<Dev />} />}
       {import.meta.env.DEV && <Route path="/dev/diwan" element={<DevDiwan />} />}
       {import.meta.env.DEV && <Route path="/dev/diwan-host" element={<DevDiwanHost />} />}

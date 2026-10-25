@@ -8,6 +8,7 @@ import { CourtRecord } from '../ui/CourtRecord';
 import { Board } from './Board';
 import { useHerald } from './herald';
 import { HeraldSettings } from './HeraldSettings';
+import { AwayPrompt } from './EndGame';
 import { ExileBanner } from './moments/ExileBanner';
 import { GameOver } from './moments/GameOver';
 import { VoteCards } from './moments/VoteCards';
@@ -32,7 +33,7 @@ export const RIOT_METER_MS = 1400;
  * The Diwan TV screen. Renders only the host view, which carries no roles (until
  * the game is over), hands, or deck order.
  */
-export function DiwanTv({ room, game, newRoom }: HostScreenProps) {
+export function DiwanTv({ room, game, newRoom, endGame }: HostScreenProps) {
   const view = game as DiwanHostView;
   const name = useMemo(() => nameLookup(view.players), [view.players]);
   const reduced = useReducedMotion();
@@ -131,7 +132,7 @@ export function DiwanTv({ room, game, newRoom }: HostScreenProps) {
               >
                 {room.code}
               </p>
-              <HeraldSettings newRoom={newRoom} />
+              <HeraldSettings newRoom={newRoom} endGame={endGame} />
             </div>
             <h2 className="font-display text-tv-md text-court-goldLight">{theme.tv.courtRecord}</h2>
             <div className="relative min-h-0 flex-1 overflow-hidden">
@@ -140,6 +141,9 @@ export function DiwanTv({ room, game, newRoom }: HostScreenProps) {
             </div>
           </aside>
         </div>
+        {room.phase === 'playing' && (
+          <AwayPrompt players={room.players} name={name} endGame={endGame} />
+        )}
       </BadgeAnchorContext.Provider>
     </Stage>
   );

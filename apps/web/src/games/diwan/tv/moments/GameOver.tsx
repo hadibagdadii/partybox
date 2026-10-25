@@ -1,5 +1,6 @@
 import { teamOf, theme, type DiwanHostView } from '@partybox/diwan';
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import type { Names } from '../../format';
 import { StarRule } from '../../ornaments';
 import { TeamMark } from '../../ui/TeamMark';
@@ -86,6 +87,9 @@ export function GameOver({
           );
         })}
       </ul>
+      <Link to="/about" className="text-tv-sm text-court-goldLight underline">
+        {theme.tv.about}
+      </Link>
     </section>
   );
 }

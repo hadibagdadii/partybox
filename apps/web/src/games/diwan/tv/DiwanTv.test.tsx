@@ -1,5 +1,6 @@
 import { theme, type DiwanHostView, type DiwanPlayerView } from '@partybox/diwan';
 import { act, cleanup, render, screen, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { playerView } from '../phone/fixtures';
 import { DiwanTv } from './DiwanTv';
@@ -10,7 +11,7 @@ import { MOMENT_MS } from './useMoments';
 
 function renderTv(view: DiwanHostView) {
   const ui = (v: DiwanHostView) => <DiwanTv room={fixtureRoom(v)} game={v} />;
-  const result = render(ui(view));
+  const result = render(ui(view), { wrapper: MemoryRouter });
   return { rerender: (v: DiwanHostView) => result.rerender(ui(v)) };
 }
 
@@ -115,7 +116,9 @@ describe('vote reveal', () => {
     expect(badges).toHaveLength(7);
     const p3 = within(screen.getByTestId('tile-p3')).getByTestId('vote-badge');
     expect(p3.dataset.vote).toBe('no');
-    expect(p3.textContent).toBe(theme.votes.no.label);
+    expect(within(p3).getByText(theme.votes.no.label)).toBeTruthy();
+    // Screen readers hear who voted and the plain-English gloss.
+    expect(within(p3).getByText('Layla voted Laa (No)').className).toContain('sr-only');
 
     // Still there while the table argues through legislation...
     rerender({ ...view, phase: 'wazirEnact', waitingOn: ['p4'] });
@@ -142,7 +145,7 @@ describe('vote reveal', () => {
 describe('table', () => {
   it('marks offices, term limits, exiles, and dropped phones', () => {
     const view = scenes.exile.view;
-    render(<DiwanTv room={fixtureRoom(view, ['p7'])} game={view} />);
+    render(<DiwanTv room={fixtureRoom(view, ['p7'])} game={view} />, { wrapper: MemoryRouter });
     expect(screen.getByTestId('tile-p3').dataset.office).toBe('ameer');
     expect(within(screen.getByTestId('tile-p4')).getByTestId('term-limit')).toBeTruthy();
     expect(screen.getByTestId('tile-p5').dataset.exiled).toBe('true');
@@ -174,5 +177,44 @@ describe('table', () => {
     advance(MOMENT_MS.riot.full);
     expect(screen.getByTestId('unrest').textContent).toBe('0/3');
     expect(within(screen.getByTestId('track-rebel')).getByText(theme.tv.riotTag)).toBeTruthy();
+  });
+});
+
+describe('ending the game', () => {
+  function renderWithEnd(view: DiwanHostView, room = fixtureRoom(view)) {
+    const endGame = vi.fn();
+    render(<DiwanTv room={room} game={view} endGame={endGame} />, { wrapper: MemoryRouter });
+    return endGame;
+  }
+
+  it('ends the game from the gear menu only after a confirm', () => {
+    const endGame = renderWithEnd(scenes.nominate.view);
+    act(() => screen.getByRole('button', { name: theme.tv.settings }).click());
+    act(() => screen.getByRole('button', { name: theme.tv.endGame }).click());
+    expect(endGame).not.toHaveBeenCalled();
+    expect(screen.getByRole('alertdialog', { name: theme.tv.endGameSure })).toBeTruthy();
+    act(() => screen.getByRole('button', { name: theme.tv.endGameYes }).click());
+    expect(endGame).toHaveBeenCalledOnce();
+    expect(screen.getByRole('link', { name: theme.tv.about })).toBeTruthy();
+  });
+
+  it('gently suggests waiting or ending once someone has been away a while', () => {
+    const view = scenes.nominate.view;
+    const base = fixtureRoom(view, ['p7']);
+    const quiet = renderWithEnd(view, base);
+    expect(screen.queryByTestId('away-prompt')).toBeNull();
+    cleanup();
+
+    const room = {
+      ...base,
+      players: base.players.map((p) => (p.id === 'p7' ? { ...p, awayLong: true } : p)),
+    };
+    const endGame = renderWithEnd(view, room);
+    const prompt = screen.getByTestId('away-prompt');
+    expect(prompt.textContent).toContain(theme.tv.awayPrompt('Noor'));
+    act(() => within(prompt).getByRole('button', { name: theme.tv.awayWait }).click());
+    expect(screen.queryByTestId('away-prompt')).toBeNull();
+    expect(endGame).not.toHaveBeenCalled();
+    expect(quiet).not.toHaveBeenCalled();
   });
 });

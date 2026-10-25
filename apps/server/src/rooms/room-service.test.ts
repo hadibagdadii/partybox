@@ -2,21 +2,32 @@ import { createRng, type AckResult } from '@partybox/shared';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_GAME_ID, createGameRegistry } from '../games.js';
 import { MemoryRoomStore } from './room-store.js';
-import { RoomService } from './room-service.js';
+import { AWAY_LONG_MS, RoomService } from './room-service.js';
 
 /** Most room rules are easiest to exercise with Tap Race's 2-player games. */
-function setup(gameId = 'tap-race', devTools = true) {
+function setup(gameId = 'tap-race', devTools = true, seed = 99) {
   let id = 0;
-  const rng = createRng(99);
+  const clock = { now: 0 };
+  const rng = createRng(seed);
   const rooms = new RoomService({
     store: new MemoryRoomStore(),
     games: createGameRegistry({ devTools }),
     defaultGameId: DEFAULT_GAME_ID,
     randInt: rng.int,
     newId: () => `id-${++id}`,
+    now: () => clock.now,
   });
   const created = ok(rooms.createRoom(gameId));
-  return { rooms, code: created.code, hostToken: created.hostToken };
+  return { rooms, code: created.code, hostToken: created.hostToken, clock };
+}
+
+/** A Diwan lobby with a VIP, a second human, and bots to reach `size` seats. */
+function diwanLobby(size = 5, seed = 99) {
+  const base = setup('diwan', true, seed);
+  const vip = ok(base.rooms.join(base.code, 'Amina'));
+  const other = ok(base.rooms.join(base.code, 'Bilal'));
+  for (let i = 2; i < size; i++) ok(base.rooms.addBot(base.code));
+  return { ...base, vip, other };
 }
 
 function ok<T extends object>(result: AckResult<T>): T {
@@ -217,5 +228,158 @@ describe('RoomService bot turns', () => {
     ok(rooms.start(code, vip.playerId));
     expect(rooms.botTurns(code)).toEqual([]);
     expect(rooms.hostView(code)?.waitingOn).toHaveLength(2);
+  });
+});
+
+describe('RoomService tutorial', () => {
+  it('lets only the VIP run it, and resumes on the same slide', () => {
+    const { rooms, code, vip, other } = diwanLobby();
+    expect(errorCode(rooms.startTutorial(code, other.playerId))).toBe('not_vip');
+    expect(errorCode(rooms.stepTutorial(code, vip.playerId, 'next'))).toBe('wrong_phase');
+    ok(rooms.startTutorial(code, vip.playerId));
+    expect(rooms.hostView(code)?.room.tutorial).toEqual({ slide: 0, total: 7 });
+
+    ok(rooms.stepTutorial(code, vip.playerId, 'back'));
+    expect(rooms.hostView(code)?.room.tutorial?.slide).toBe(0);
+    ok(rooms.stepTutorial(code, vip.playerId, 'next'));
+    ok(rooms.stepTutorial(code, vip.playerId, 'next'));
+    expect(errorCode(rooms.stepTutorial(code, other.playerId, 'next'))).toBe('not_vip');
+    expect(errorCode(rooms.skipTutorial(code, other.playerId))).toBe('not_vip');
+
+    // A refresh asks for fresh views; the slide lives in the room, so both match.
+    expect(rooms.hostView(code)?.room.tutorial?.slide).toBe(2);
+    expect(rooms.playerView(code, vip.playerId)?.room.tutorial?.slide).toBe(2);
+    ok(rooms.stepTutorial(code, vip.playerId, 'back'));
+    expect(rooms.playerView(code, other.playerId)?.room.tutorial?.slide).toBe(1);
+  });
+
+  it('starts the game on Next from the last slide', () => {
+    const { rooms, code, vip } = diwanLobby();
+    ok(rooms.startTutorial(code, vip.playerId));
+    for (let i = 0; i < 6; i++) ok(rooms.stepTutorial(code, vip.playerId, 'next'));
+    expect(rooms.hostView(code)?.room).toMatchObject({ phase: 'lobby', tutorial: { slide: 6 } });
+    ok(rooms.stepTutorial(code, vip.playerId, 'next'));
+    expect(rooms.hostView(code)?.room).toMatchObject({ phase: 'playing', tutorial: null });
+    expect(errorCode(rooms.startTutorial(code, vip.playerId))).toBe('wrong_phase');
+  });
+
+  it('starts the game on Skip', () => {
+    const { rooms, code, vip } = diwanLobby();
+    expect(errorCode(rooms.skipTutorial(code, vip.playerId))).toBe('wrong_phase');
+    ok(rooms.startTutorial(code, vip.playerId));
+    ok(rooms.skipTutorial(code, vip.playerId));
+    expect(rooms.hostView(code)?.room).toMatchObject({ phase: 'playing', tutorial: null });
+  });
+
+  it('is unavailable for games without one', () => {
+    const { rooms, code } = setup('tap-race');
+    const vip = ok(rooms.join(code, 'Amina'));
+    expect(errorCode(rooms.startTutorial(code, vip.playerId))).toBe('no_tutorial');
+  });
+});
+
+describe('RoomService play again', () => {
+  function finishedTapRace(seed = 99) {
+    const base = setup('tap-race', true, seed);
+    const vip = ok(base.rooms.join(base.code, 'Amina'));
+    const others = ['Bilal', 'Dalia', 'Faris', 'Huda', 'Jamal'].map(
+      (n) => ok(base.rooms.join(base.code, n)).playerId,
+    );
+    ok(base.rooms.start(base.code, vip.playerId));
+    ok(base.rooms.act(base.code, vip.playerId, { type: 'tap' }));
+    return { ...base, vip, ids: [vip.playerId, ...others] };
+  }
+
+  it('keeps the same players and reshuffles seats with the room RNG', () => {
+    const { rooms, code, vip, ids } = finishedTapRace();
+    expect(errorCode(rooms.playAgain(code, ids[1]!))).toBe('not_vip');
+    ok(rooms.playAgain(code, vip.playerId));
+    const room = rooms.hostView(code)!.room;
+    expect(room.phase).toBe('playing');
+    const order = room.players.map((p) => p.id);
+    expect([...order].sort()).toEqual([...ids].sort());
+    expect(order).not.toEqual(ids);
+    expect(rooms.playerView(code, vip.playerId)?.you.isVip).toBe(true);
+
+    // Same seed, same shuffle: replayable.
+    const again = finishedTapRace();
+    ok(again.rooms.playAgain(again.code, again.vip.playerId));
+    expect(again.rooms.hostView(again.code)!.room.players.map((p) => p.id)).toEqual(order);
+  });
+
+  it('only works once the game is over', () => {
+    const { rooms, code, vip } = diwanLobby();
+    expect(errorCode(rooms.playAgain(code, vip.playerId))).toBe('wrong_phase');
+    ok(rooms.start(code, vip.playerId));
+    expect(errorCode(rooms.playAgain(code, vip.playerId))).toBe('wrong_phase');
+  });
+});
+
+describe('RoomService removal', () => {
+  it('lets the host remove a lobby player and hands VIP to the next human', () => {
+    const { rooms, code, vip, other } = diwanLobby();
+    ok(rooms.kick(code, vip.playerId));
+    const room = rooms.hostView(code)!.room;
+    expect(room.players.map((p) => p.id)).not.toContain(vip.playerId);
+    expect(room.players.find((p) => p.isVip)?.id).toBe(other.playerId);
+    expect(rooms.playerView(code, vip.playerId)).toBeNull();
+    expect(errorCode(rooms.resumePlayer(code, vip.playerToken))).toBe('removed');
+    expect(errorCode(rooms.kick(code, vip.playerId))).toBe('not_in_room');
+  });
+
+  it('leaves no VIP when only bots remain', () => {
+    const { rooms, code, vip, other } = diwanLobby();
+    ok(rooms.leave(code, other.playerId));
+    ok(rooms.leave(code, vip.playerId));
+    expect(rooms.hostView(code)!.room.players.some((p) => p.isVip)).toBe(false);
+    const late = ok(rooms.join(code, 'Late'));
+    expect(rooms.playerView(code, late.playerId)?.you.isVip).toBe(true);
+  });
+
+  it('passes VIP on when the VIP leaves', () => {
+    const { rooms, code, vip, other } = diwanLobby();
+    ok(rooms.leave(code, vip.playerId));
+    expect(rooms.playerView(code, other.playerId)?.you.isVip).toBe(true);
+  });
+
+  it('refuses removal or leaving mid-game', () => {
+    const { rooms, code, vip, other } = diwanLobby();
+    ok(rooms.start(code, vip.playerId));
+    expect(errorCode(rooms.kick(code, other.playerId))).toBe('cannot_remove');
+    expect(errorCode(rooms.leave(code, other.playerId))).toBe('game_in_progress');
+    expect(rooms.hostView(code)!.room.players).toHaveLength(5);
+  });
+});
+
+describe('RoomService end game', () => {
+  it('returns everyone to the lobby without revealing roles', () => {
+    const { rooms, code, vip, other } = diwanLobby(7);
+    expect(errorCode(rooms.endGame(code))).toBe('wrong_phase');
+    ok(rooms.start(code, vip.playerId));
+    ok(rooms.endGame(code));
+    const host = rooms.hostView(code)!;
+    const phones = [vip, other].map((p) => rooms.playerView(code, p.playerId)!);
+    expect(host).toMatchObject({ room: { phase: 'lobby', tutorial: null }, game: null });
+    for (const v of phones) expect(v.game).toBeNull();
+    const json = JSON.stringify([host, ...phones]);
+    expect(json).not.toMatch(/roles|usurper|"role"/);
+    expect(host.room.players).toHaveLength(7);
+    ok(rooms.start(code, vip.playerId));
+  });
+});
+
+describe('RoomService away flag', () => {
+  it('flags a player gone for two minutes, and clears it on return', () => {
+    const { rooms, code, vip, clock } = diwanLobby();
+    ok(rooms.start(code, vip.playerId));
+    clock.now = 1_000;
+    rooms.setConnected(code, vip.playerId, false);
+    const player = () => rooms.hostView(code)!.room.players.find((p) => p.id === vip.playerId)!;
+    clock.now = 1_000 + AWAY_LONG_MS - 1;
+    expect(player()).toMatchObject({ connected: false, awayLong: false });
+    clock.now = 1_000 + AWAY_LONG_MS;
+    expect(player().awayLong).toBe(true);
+    ok(rooms.resumePlayer(code, vip.playerToken));
+    expect(player()).toMatchObject({ connected: true, awayLong: false });
   });
 });

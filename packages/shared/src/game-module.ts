@@ -31,6 +31,8 @@ export interface GameModule<State, Action, Event, HostView, PlayerView> {
   displayName: string;
   minPlayers: number;
   maxPlayers: number;
+  /** Slides in the game's lobby tutorial; the room tracks the slide, the game draws it. */
+  tutorialSlides?: number;
   /** Validates untrusted action payloads before they reach `reduce`. */
   actionSchema: z.ZodType<Action, z.ZodTypeDef, unknown>;
   createInitialState(players: readonly SeatInfo[], rng: Rng): State;

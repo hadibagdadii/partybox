@@ -11,6 +11,7 @@ const room: LobbyView = {
   maxPlayers: 10,
   phase: 'playing',
   players: [],
+  tutorial: null,
 };
 
 /** Dev-only: every Diwan phone screen rendered from fixtures, for design review. */
@@ -44,6 +45,7 @@ export function DevDiwan() {
       act={async () => undefined}
       seatKey={`partybox:dev-diwan:${id}`}
       reset={view.phase === 'over' ? () => undefined : null}
+      playAgain={view.phase === 'over' ? () => undefined : null}
     />
   );
 }

@@ -89,4 +89,95 @@ describe('socket room flow', () => {
     const bot = await socket.emitWithAck('dev:addBot', {});
     expect(bot).toMatchObject({ ok: false, error: { code: 'not_in_room' } });
   });
+
+  it('resumes a refreshed TV and VIP phone on the same tutorial slide', async () => {
+    const tv = await client();
+    const { code, hostToken } = await ok(tv.emitWithAck('room:create', {}));
+    const vip = await client();
+    const joined = await ok(vip.emitWithAck('room:join', { code, name: 'Amina' }));
+    for (let i = 0; i < 4; i++) await ok(tv.emitWithAck('dev:addBot', {}));
+
+    await ok(vip.emitWithAck('tutorial:start', {}));
+    await ok(vip.emitWithAck('tutorial:step', { dir: 'next' }));
+    await ok(vip.emitWithAck('tutorial:step', { dir: 'next' }));
+    // @ts-expect-error deliberately malformed
+    const bad = await vip.emitWithAck('tutorial:step', { dir: 'sideways' });
+    expect(bad).toMatchObject({ ok: false, error: { code: 'invalid_payload' } });
+    const fromTv = await tv.emitWithAck('tutorial:step', { dir: 'next' });
+    expect(fromTv).toMatchObject({ ok: false, error: { code: 'not_in_room' } });
+
+    tv.disconnect();
+    vip.disconnect();
+    const tv2 = await client();
+    const tv2Log = record(tv2);
+    await ok(tv2.emitWithAck('host:resume', { code, hostToken }));
+    const vip2 = await client();
+    const vip2Log = record(vip2);
+    await ok(vip2.emitWithAck('player:resume', { code, playerToken: joined.playerToken }));
+    await until(() => tv2Log.host.length > 0 && vip2Log.player.length > 0);
+    expect(tv2Log.host.at(-1)?.room.tutorial).toEqual({ slide: 2, total: 7 });
+    expect(vip2Log.player.at(-1)?.room.tutorial).toEqual({ slide: 2, total: 7 });
+
+    await ok(vip2.emitWithAck('tutorial:skip', {}));
+    await until(() => tv2Log.host.at(-1)?.room.phase === 'playing');
+  });
+
+  it('tells a removed phone, stops its views, and refuses its token', async () => {
+    const tv = await client();
+    const tvLog = record(tv);
+    const { code } = await ok(tv.emitWithAck('room:create', {}));
+    const amina = await client();
+    const a = await ok(amina.emitWithAck('room:join', { code, name: 'Amina' }));
+    const bilal = await client();
+    const bilalLog = record(bilal);
+    const b = await ok(bilal.emitWithAck('room:join', { code, name: 'Bilal' }));
+    const aminaLog = record(amina);
+    let removed = 0;
+    amina.on('player:removed', () => removed++);
+
+    const fromPhone = await bilal.emitWithAck('room:kick', { playerId: a.playerId });
+    expect(fromPhone).toMatchObject({ ok: false, error: { code: 'not_in_room' } });
+    await ok(tv.emitWithAck('room:kick', { playerId: a.playerId }));
+    await until(() => removed === 1);
+    await until(() => bilalLog.player.at(-1)?.you.isVip === true);
+    const seen = aminaLog.player.length;
+    await ok(tv.emitWithAck('dev:addBot', {}));
+    await until(() => tvLog.host.at(-1)?.room.players.length === 2);
+    expect(aminaLog.player.length).toBe(seen);
+
+    const back = await amina.emitWithAck('player:resume', { code, playerToken: a.playerToken });
+    expect(back).toMatchObject({ ok: false, error: { code: 'removed' } });
+    expect(tvLog.host.at(-1)?.room.players.map((p) => p.id)).toEqual([
+      b.playerId,
+      expect.any(String),
+    ]);
+  });
+
+  it('ends a Diwan game mid-play for everyone, roles unrevealed', async () => {
+    const tv = await client();
+    const tvLog = record(tv);
+    const { code } = await ok(tv.emitWithAck('room:create', {}));
+    const vip = await client();
+    const vipLog = record(vip);
+    await ok(vip.emitWithAck('room:join', { code, name: 'Amina' }));
+    for (let i = 0; i < 4; i++) await ok(tv.emitWithAck('dev:addBot', {}));
+    await ok(vip.emitWithAck('game:start', {}));
+    await until(() => tvLog.host.at(-1)?.room.phase === 'playing');
+
+    const fromPhone = await vip.emitWithAck('game:end', {});
+    expect(fromPhone).toMatchObject({ ok: false, error: { code: 'not_in_room' } });
+    const kick = await tv.emitWithAck('room:kick', { playerId: vipLog.player.at(-1)!.you.id });
+    expect(kick).toMatchObject({ ok: false, error: { code: 'cannot_remove' } });
+
+    const before = tvLog.host.length;
+    await ok(tv.emitWithAck('game:end', {}));
+    await until(() => tvLog.host.at(-1)?.room.phase === 'lobby');
+    await until(() => vipLog.player.at(-1)?.room.phase === 'lobby');
+    const after = [...tvLog.host.slice(before), ...vipLog.player.slice(-1)];
+    for (const v of after) {
+      if (v.room.phase === 'lobby') expect(v.game).toBeNull();
+    }
+    expect(JSON.stringify(tvLog.host.at(-1))).not.toMatch(/roles|usurper/);
+    expect(tvLog.host.at(-1)?.room.players).toHaveLength(5);
+  });
 });

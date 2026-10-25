@@ -9,6 +9,7 @@ import { LatticeBackground, WaxSeal } from '../ornaments';
 import { CourtRecord } from '../ui/CourtRecord';
 import { CourtStrip } from './CourtStrip';
 import { RoleDetails } from './RoleDetails';
+import { RulesSummary } from './RulesSummary';
 import { pickScreen, type ScreenProps } from './screen';
 import { NominateScreen } from './screens/Nominate';
 import { DiscardScreen, EnactScreen, VetoAnswerScreen } from './screens/Legislate';
@@ -19,11 +20,20 @@ import { VoteScreen } from './screens/Vote';
 import { BottomSheet } from './ui';
 
 /** The Diwan phone: header with role peek and log, then the screen the server's view calls for. */
-export function DiwanPhone({ room, you: seat, game, act, seatKey, reset }: PlayerScreenProps) {
+export function DiwanPhone({
+  room,
+  you: seat,
+  game,
+  act,
+  seatKey,
+  reset,
+  playAgain,
+}: PlayerScreenProps) {
   const view = game as DiwanPlayerView;
   const name = useMemo(() => nameLookup(view.players), [view.players]);
   const [busy, setBusy] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
+  const [tab, setTab] = useState<'record' | 'rules'>('record');
   const { unseenSpy, markSeen } = useSeenSecrets(seatKey, view.secrets);
   useTurnBuzz(!!view.you && view.waitingOn.includes(view.you.id));
 
@@ -36,7 +46,7 @@ export function DiwanPhone({ room, you: seat, game, act, seatKey, reset }: Playe
   const props: ScreenProps = { view, name, act: send, busy };
 
   return (
-    <div className="relative flex h-dvh flex-col overflow-hidden bg-court-night text-court-parchment">
+    <div className="no-select relative flex h-dvh flex-col overflow-hidden bg-court-night text-court-parchment">
       <LatticeBackground className="opacity-[0.07]" />
       <header className="relative z-30 flex items-center justify-between gap-2 border-b border-court-gold/20 bg-court-night/80 px-safe pb-2 pt-safe backdrop-blur">
         {view.you ? <RolePeek view={view} name={name} /> : <span />}
@@ -59,14 +69,38 @@ export function DiwanPhone({ room, you: seat, game, act, seatKey, reset }: Playe
         {!view.you ? null : screen === 'spyResult' && unseenSpy ? (
           <SpyResultScreen secret={unseenSpy} name={name} onDone={markSeen} />
         ) : screen === 'gameOver' ? (
-          <GameOverScreen view={view} name={name} reset={reset} />
+          <GameOverScreen view={view} name={name} reset={reset} playAgain={playAgain} />
         ) : (
           <Screen key={screen} id={screen} {...props} />
         )}
       </div>
 
-      <BottomSheet title={theme.phone.courtRecord} open={logOpen} onClose={() => setLogOpen(false)}>
-        <CourtRecord log={view.log} name={name} />
+      <BottomSheet
+        title={tab === 'rules' ? theme.rules.title : theme.phone.courtRecord}
+        open={logOpen}
+        onClose={() => setLogOpen(false)}
+      >
+        <div role="tablist" className="mb-4 grid grid-cols-2 gap-2">
+          {(['record', 'rules'] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              role="tab"
+              aria-selected={tab === t}
+              onClick={() => setTab(t)}
+              className={`min-h-tap-min rounded-button text-lg ${
+                tab === t
+                  ? 'bg-court-gold font-semibold text-court-ink'
+                  : 'border border-court-gold/40 text-court-parchment'
+              }`}
+            >
+              {t === 'rules' ? theme.phone.rulesTab : theme.phone.recordTab}
+            </button>
+          ))}
+        </div>
+        <div role="tabpanel">
+          {tab === 'rules' ? <RulesSummary /> : <CourtRecord log={view.log} name={name} />}
+        </div>
       </BottomSheet>
     </div>
   );

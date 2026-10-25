@@ -54,3 +54,35 @@ describe('HoldToReveal', () => {
     expect(screen.queryByText('The Usurper')).toBeNull();
   });
 });
+
+describe('HoldToReveal from the keyboard', () => {
+  it('reveals while Enter is held, through key repeat, and hides on release', () => {
+    const button = setup();
+    fireEvent.keyDown(button, { key: 'Enter' });
+    fireEvent.keyDown(button, { key: 'Enter', repeat: true });
+    fireEvent.keyDown(button, { key: 'Enter', repeat: true });
+    expect(screen.getByText('The Usurper')).toBeTruthy();
+    fireEvent.keyUp(button, { key: 'Enter' });
+    expect(screen.queryByText('The Usurper')).toBeNull();
+  });
+
+  it('ignores other keys and hides if focus leaves mid-hold', () => {
+    const button = setup();
+    fireEvent.keyDown(button, { key: 'a' });
+    expect(screen.queryByText('The Usurper')).toBeNull();
+    fireEvent.keyDown(button, { key: ' ' });
+    expect(screen.getByText('The Usurper')).toBeTruthy();
+    fireEvent.blur(button);
+    expect(screen.queryByText('The Usurper')).toBeNull();
+  });
+
+  it('is focusable and blocks the long-press menu', () => {
+    const button = setup();
+    button.focus();
+    expect(document.activeElement).toBe(button);
+    expect(button.className).toContain('no-callout');
+    const menu = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+    button.dispatchEvent(menu);
+    expect(menu.defaultPrevented).toBe(true);
+  });
+});

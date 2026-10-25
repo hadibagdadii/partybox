@@ -4,9 +4,11 @@ import {
   emptySchema,
   gameActionSchema,
   joinRoomSchema,
+  kickSchema,
   resumeHostSchema,
   resumePlayerSchema,
   setGameSchema,
+  tutorialStepSchema,
   type Ack,
   type AckResult,
   type ClientToServerEvents,
@@ -16,7 +18,7 @@ import { randomInt } from 'node:crypto';
 import type { Server, Socket } from 'socket.io';
 import type { z } from 'zod';
 import { BotRunner } from './rooms/bot-runner.js';
-import type { RoomService } from './rooms/room-service.js';
+import { AWAY_LONG_MS, type RoomService } from './rooms/room-service.js';
 
 export interface SocketData {
   role?: 'host' | 'player';
@@ -89,12 +91,41 @@ export function registerSocketHandlers(
     bots?.sync(code);
   };
 
+  /** One timer per away seat, so the TV hears when a player has been gone too long. */
+  const awayTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  const clearAway = (code: string, playerId: string) => {
+    const key = playerChannel(code, playerId);
+    clearTimeout(awayTimers.get(key));
+    awayTimers.delete(key);
+  };
+
   /** Marks a seat disconnected once its last socket is gone. */
   const releaseSeat = (code: string, playerId: string) => {
-    const remaining = io.sockets.adapter.rooms.get(playerChannel(code, playerId))?.size ?? 0;
+    const channel = playerChannel(code, playerId);
+    const remaining = io.sockets.adapter.rooms.get(channel)?.size ?? 0;
     if (remaining === 0) {
       rooms.setConnected(code, playerId, false);
       broadcast(code);
+      clearAway(code, playerId);
+      const timer = setTimeout(() => {
+        awayTimers.delete(channel);
+        broadcast(code);
+      }, AWAY_LONG_MS + 50);
+      timer.unref?.();
+      awayTimers.set(channel, timer);
+    }
+  };
+
+  /** Tells a removed seat's phones, then unsubscribes them so they get no more views. */
+  const evict = (code: string, playerId: string) => {
+    const channel = playerChannel(code, playerId);
+    clearAway(code, playerId);
+    io.to(channel).emit('player:removed');
+    for (const id of io.sockets.adapter.rooms.get(channel) ?? []) {
+      const s = io.sockets.sockets.get(id);
+      if (!s) continue;
+      void s.leave(channel);
+      s.data = {};
     }
   };
 
@@ -130,6 +161,7 @@ export function registerSocketHandlers(
   };
 
   const bindPlayer = (socket: IoSocket, code: string, playerId: string) => {
+    clearAway(code, playerId);
     if (socket.data.code === code && socket.data.playerId === playerId) return;
     unbind(socket);
     void socket.join(playerChannel(code, playerId));
@@ -218,6 +250,57 @@ export function registerSocketHandlers(
       asPlayer(socket, ack, (code, playerId) => rooms.reset(code, playerId));
     });
 
+    socket.on('game:playAgain', (payload, ack) => {
+      if (!parse(emptySchema, payload)) return replier(ack)(invalidPayload);
+      asPlayer(socket, ack, (code, playerId) => {
+        bots?.cancel(code);
+        return rooms.playAgain(code, playerId);
+      });
+    });
+
+    socket.on('game:end', (payload, ack) => {
+      if (!parse(emptySchema, payload)) return replier(ack)(invalidPayload);
+      asHost(socket, ack, (code) => {
+        bots?.cancel(code);
+        return rooms.endGame(code);
+      });
+    });
+
+    socket.on('tutorial:start', (payload, ack) => {
+      if (!parse(emptySchema, payload)) return replier(ack)(invalidPayload);
+      asPlayer(socket, ack, (code, playerId) => rooms.startTutorial(code, playerId));
+    });
+
+    socket.on('tutorial:step', (payload, ack) => {
+      const input = parse(tutorialStepSchema, payload);
+      if (!input) return replier(ack)(invalidPayload);
+      asPlayer(socket, ack, (code, playerId) => rooms.stepTutorial(code, playerId, input.dir));
+    });
+
+    socket.on('tutorial:skip', (payload, ack) => {
+      if (!parse(emptySchema, payload)) return replier(ack)(invalidPayload);
+      asPlayer(socket, ack, (code, playerId) => rooms.skipTutorial(code, playerId));
+    });
+
+    socket.on('room:kick', (payload, ack) => {
+      const input = parse(kickSchema, payload);
+      if (!input) return replier(ack)(invalidPayload);
+      asHost(socket, ack, (code) => {
+        const result = rooms.kick(code, input.playerId);
+        if (result.ok) evict(code, input.playerId);
+        return result;
+      });
+    });
+
+    socket.on('room:leave', (payload, ack) => {
+      if (!parse(emptySchema, payload)) return replier(ack)(invalidPayload);
+      asPlayer(socket, ack, (code, playerId) => {
+        const result = rooms.leave(code, playerId);
+        if (result.ok) evict(code, playerId);
+        return result;
+      });
+    });
+
     socket.on('dev:addBot', (payload, ack) => {
       const reply = replier<{ playerId: string }>(ack);
       if (!options.devTools) {
@@ -244,7 +327,19 @@ export function registerSocketHandlers(
   });
 
   return {
-    cancelRoom: (code) => bots?.cancel(code),
-    close: () => bots?.cancelAll(),
+    cancelRoom: (code) => {
+      bots?.cancel(code);
+      for (const [key, timer] of awayTimers) {
+        if (key.startsWith(`player:${code}:`)) {
+          clearTimeout(timer);
+          awayTimers.delete(key);
+        }
+      }
+    },
+    close: () => {
+      bots?.cancelAll();
+      for (const timer of awayTimers.values()) clearTimeout(timer);
+      awayTimers.clear();
+    },
   };
 }

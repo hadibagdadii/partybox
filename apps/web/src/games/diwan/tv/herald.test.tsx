@@ -1,5 +1,6 @@
 import { theme, type DiwanHostView, type LogEntry } from '@partybox/diwan';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { nameLookup } from '../format';
 import { playerView } from '../phone/fixtures';
@@ -30,7 +31,7 @@ const name = nameLookup(fixturePlayers);
 
 function renderTv(view: DiwanHostView) {
   const ui = (v: DiwanHostView) => <DiwanTv room={fixtureRoom(v)} game={v} />;
-  const result = render(ui(view));
+  const result = render(ui(view), { wrapper: MemoryRouter });
   return { rerender: (v: DiwanHostView) => result.rerender(ui(v)) };
 }
 

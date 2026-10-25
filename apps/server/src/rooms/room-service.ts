@@ -10,6 +10,7 @@ import {
 } from '@partybox/shared';
 import { randomInt, randomUUID } from 'node:crypto';
 import type { Room, Seat } from './room.js';
+export { AWAY_LONG_MS } from './room.js';
 import type { RoomStore } from './room-store.js';
 import { buildHostView, buildPlayerView } from './views.js';
 
@@ -26,6 +27,8 @@ export interface RoomServiceOptions {
   /** Integer in [0, n). Used for room codes and game seeds. */
   randInt?: (maxExclusive: number) => number;
   newId?: () => string;
+  /** Clock for the away flag. */
+  now?: () => number;
 }
 
 function fail(
@@ -48,6 +51,7 @@ export class RoomService {
   private readonly defaultGameId: string;
   private readonly randInt: (maxExclusive: number) => number;
   private readonly newId: () => string;
+  private readonly now: () => number;
 
   constructor(options: RoomServiceOptions) {
     this.store = options.store;
@@ -55,6 +59,7 @@ export class RoomService {
     this.defaultGameId = options.defaultGameId;
     this.randInt = options.randInt ?? ((n) => randomInt(n));
     this.newId = options.newId ?? randomUUID;
+    this.now = options.now ?? Date.now;
   }
 
   createRoom(gameId = this.defaultGameId): AckResult<{ code: string; hostToken: string }> {
@@ -68,6 +73,9 @@ export class RoomService {
       seats: [],
       vipId: null,
       game: null,
+      rng: createRng(this.randInt(2 ** 31)),
+      tutorial: null,
+      removedTokens: new Set(),
     };
     this.store.save(room);
     return { ok: true, code, hostToken: room.hostToken };
@@ -118,8 +126,13 @@ export class RoomService {
     const room = this.store.get(code);
     if (!room) return roomNotFound();
     const seat = room.seats.find((s) => !s.isBot && s.token === playerToken);
-    if (!seat) return fail('invalid_token', 'That seat is no longer yours');
+    if (!seat) {
+      return room.removedTokens.has(playerToken)
+        ? fail('removed', 'You were removed from the room')
+        : fail('invalid_token', 'That seat is no longer yours');
+    }
     seat.connected = true;
+    seat.disconnectedAt = null;
     this.store.save(room);
     return { ok: true, playerId: seat.id };
   }
@@ -129,6 +142,7 @@ export class RoomService {
     const seat = room?.seats.find((s) => s.id === playerId);
     if (!room || !seat || seat.isBot) return;
     seat.connected = connected;
+    seat.disconnectedAt = connected ? null : (seat.disconnectedAt ?? this.now());
     this.store.save(room);
   }
 
@@ -165,12 +179,49 @@ export class RoomService {
     if (room.seats.length < game.minPlayers) {
       return fail('not_enough_players', `Need at least ${game.minPlayers} players`);
     }
-    const rng = createRng(this.randInt(2 ** 31));
+    const rng = createRng(room.rng.int(2 ** 31));
     const seats = room.seats.map((s) => ({ id: s.id, name: s.name }));
     room.game = { state: game.createInitialState(seats, rng), rng };
     room.phase = 'playing';
+    room.tutorial = null;
     this.store.save(room);
     return { ok: true };
+  }
+
+  /** VIP opens the game's tutorial on the TV instead of starting straight away. */
+  startTutorial(code: string, playerId: string): AckResult {
+    const room = this.store.get(code);
+    if (!room) return roomNotFound();
+    const denied = this.vipInLobby(room, playerId);
+    if (denied) return denied;
+    if (!this.gameFor(room).tutorialSlides) return fail('no_tutorial', 'This game has no tutorial');
+    room.tutorial = 0;
+    this.store.save(room);
+    return { ok: true };
+  }
+
+  /** Moves one slide; Next on the last slide starts the game. Back on the first stays put. */
+  stepTutorial(code: string, playerId: string, dir: 'next' | 'back'): AckResult {
+    const room = this.store.get(code);
+    if (!room) return roomNotFound();
+    const denied = this.vipInLobby(room, playerId);
+    if (denied) return denied;
+    if (room.tutorial === null) return fail('wrong_phase', 'The tutorial is not running');
+    const total = this.gameFor(room).tutorialSlides ?? 0;
+    if (dir === 'next' && room.tutorial >= total - 1) return this.startRoom(room);
+    room.tutorial = dir === 'next' ? room.tutorial + 1 : Math.max(0, room.tutorial - 1);
+    this.store.save(room);
+    return { ok: true };
+  }
+
+  /** Ends the tutorial and starts the game. */
+  skipTutorial(code: string, playerId: string): AckResult {
+    const room = this.store.get(code);
+    if (!room) return roomNotFound();
+    const denied = this.vipInLobby(room, playerId);
+    if (denied) return denied;
+    if (room.tutorial === null) return fail('wrong_phase', 'The tutorial is not running');
+    return this.startRoom(room);
   }
 
   act(code: string, playerId: string, rawAction: unknown): AckResult {
@@ -205,6 +256,57 @@ export class RoomService {
     return { ok: true };
   }
 
+  /** VIP starts a fresh game with the same players, in a new seat order from the room's RNG. */
+  playAgain(code: string, playerId: string): AckResult {
+    const room = this.store.get(code);
+    if (!room) return roomNotFound();
+    if (!room.seats.some((s) => s.id === playerId)) return notInRoom();
+    if (room.vipId !== playerId) return fail('not_vip', 'Only the VIP can do that');
+    if (room.phase !== 'over') return fail('wrong_phase', 'The game is not over yet');
+    const seats = room.seats;
+    for (let i = seats.length - 1; i > 0; i--) {
+      const j = room.rng.int(i + 1);
+      [seats[i], seats[j]] = [seats[j]!, seats[i]!];
+    }
+    room.phase = 'lobby';
+    room.game = null;
+    return this.startRoom(room);
+  }
+
+  /** Host ends the game for everyone. Roles are dropped with the state, never revealed. */
+  endGame(code: string): AckResult {
+    const room = this.store.get(code);
+    if (!room) return roomNotFound();
+    if (room.phase === 'lobby') return fail('wrong_phase', 'There is no game in progress');
+    room.phase = 'lobby';
+    room.game = null;
+    room.tutorial = null;
+    this.store.save(room);
+    return { ok: true };
+  }
+
+  /** Host removes a seat. Only in the lobby: mid-game it would break the roles. */
+  kick(code: string, playerId: string): AckResult<{ playerId: string }> {
+    const room = this.store.get(code);
+    if (!room) return roomNotFound();
+    if (!room.seats.some((s) => s.id === playerId)) return notInRoom();
+    if (room.phase !== 'lobby') {
+      return fail('cannot_remove', 'Players can only be removed in the lobby');
+    }
+    this.removeSeat(room, playerId);
+    return { ok: true, playerId };
+  }
+
+  /** A player leaves the lobby. */
+  leave(code: string, playerId: string): AckResult {
+    const room = this.store.get(code);
+    if (!room) return roomNotFound();
+    if (!room.seats.some((s) => s.id === playerId)) return notInRoom();
+    if (room.phase !== 'lobby') return fail('game_in_progress', 'You can leave once the game ends');
+    this.removeSeat(room, playerId);
+    return { ok: true };
+  }
+
   /** Bots the game is waiting on. Humans are never acted for, connected or not. */
   botTurns(code: string): BotTurn[] {
     const room = this.store.get(code);
@@ -225,12 +327,12 @@ export class RoomService {
 
   hostView(code: string): HostViewMessage | null {
     const room = this.store.get(code);
-    return room ? buildHostView(room, this.gameFor(room), this.availableGames()) : null;
+    return room ? buildHostView(room, this.gameFor(room), this.availableGames(), this.now()) : null;
   }
 
   playerView(code: string, playerId: string): PlayerViewMessage | null {
     const room = this.store.get(code);
-    return room ? buildPlayerView(room, this.gameFor(room), playerId) : null;
+    return room ? buildPlayerView(room, this.gameFor(room), playerId, this.now()) : null;
   }
 
   /** Human seats that may have a phone listening. Bots have no client. */
@@ -243,8 +345,33 @@ export class RoomService {
     );
   }
 
+  /** Null if `playerId` is the VIP and the room is in the lobby; the error otherwise. */
+  private vipInLobby(room: Room, playerId: string): AckResult | null {
+    if (!room.seats.some((s) => s.id === playerId)) return notInRoom();
+    if (room.vipId !== playerId) return fail('not_vip', 'Only the VIP can do that');
+    if (room.phase !== 'lobby') return fail('wrong_phase', 'The game has already started');
+    return null;
+  }
+
+  /** Drops a seat, remembers its token, and passes VIP to the next human in join order. */
+  private removeSeat(room: Room, playerId: string): void {
+    const seat = room.seats.find((s) => s.id === playerId);
+    if (!seat) return;
+    room.seats = room.seats.filter((s) => s.id !== playerId);
+    if (!seat.isBot) room.removedTokens.add(seat.token);
+    if (room.vipId === playerId) room.vipId = room.seats.find((s) => !s.isBot)?.id ?? null;
+    this.store.save(room);
+  }
+
   private addSeat(room: Room, name: string, isBot: boolean): Seat {
-    const seat: Seat = { id: this.newId(), name, token: this.newId(), isBot, connected: true };
+    const seat: Seat = {
+      id: this.newId(),
+      name,
+      token: this.newId(),
+      isBot,
+      connected: true,
+      disconnectedAt: null,
+    };
     room.seats.push(seat);
     if (!isBot && room.vipId === null) room.vipId = seat.id;
     this.store.save(room);

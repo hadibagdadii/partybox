@@ -1,12 +1,14 @@
 import { theme } from '@partybox/diwan';
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { EndGameButton } from './EndGame';
 import { herald, useHeraldState, type Voice } from './herald';
 
 /** "Enable the herald": speech can only start from a tap. */
 export function HeraldEnable({ className = '' }: { className?: string }) {
   const { enabled } = useHeraldState();
   if (enabled) {
-    return <p className={`text-court-emeraldLight ${className}`}>{theme.tv.heraldReady}</p>;
+    return <p className={`text-court-emeraldText ${className}`}>{theme.tv.heraldReady}</p>;
   }
   return (
     <button
@@ -30,8 +32,14 @@ function useVoices(): Voice[] {
   return voices;
 }
 
-/** Small gear menu: enable, mute, voice, and starting a new room. */
-export function HeraldSettings({ newRoom }: { newRoom?: () => void }) {
+/** Small gear menu: enable, mute, voice, About, ending the game, and starting a new room. */
+export function HeraldSettings({
+  newRoom,
+  endGame,
+}: {
+  newRoom?: () => void;
+  endGame?: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const { enabled, muted, voiceURI } = useHeraldState();
   const voices = useVoices();
@@ -82,6 +90,10 @@ export function HeraldSettings({ newRoom }: { newRoom?: () => void }) {
               ))}
             </select>
           </label>
+          {endGame && <EndGameButton endGame={endGame} className="self-start" />}
+          <Link to="/about" className="self-start text-court-goldLight underline">
+            {theme.tv.about}
+          </Link>
           {newRoom && (
             <button
               type="button"

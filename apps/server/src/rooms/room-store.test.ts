@@ -1,3 +1,4 @@
+import { createRng } from '@partybox/shared';
 import { describe, expect, it } from 'vitest';
 import type { Room } from './room.js';
 import { MemoryRoomStore } from './room-store.js';
@@ -10,6 +11,9 @@ const room = (code: string): Room => ({
   seats: [],
   vipId: null,
   game: null,
+  rng: createRng(1),
+  tutorial: null,
+  removedTokens: new Set(),
 });
 
 describe('MemoryRoomStore', () => {

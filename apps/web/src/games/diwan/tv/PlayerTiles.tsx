@@ -99,7 +99,7 @@ function Tile({
           }}
           className="absolute bottom-0 left-[72%]"
         >
-          {state.vote && <VoteBadge vote={state.vote} />}
+          {state.vote && <VoteBadge vote={state.vote} who={player.name} />}
         </span>
       </span>
       <span
@@ -111,7 +111,7 @@ function Tile({
       </span>
       <span className="flex h-[40px] items-center gap-2 text-tv-sm leading-none">
         {officeLabel && (
-          <span className={office === 'ameer' ? 'text-court-goldLight' : 'text-court-emeraldLight'}>
+          <span className={office === 'ameer' ? 'text-court-goldLight' : 'text-court-emeraldText'}>
             {officeLabel}
           </span>
         )}
@@ -132,8 +132,10 @@ function Tile({
   );
 }
 
-export function VoteBadge({ vote }: { vote: VoteId }) {
+/** A face-up vote. `who` adds screen-reader text naming the voter. */
+export function VoteBadge({ vote, who }: { vote: VoteId; who?: string }) {
   const yes = vote === 'yes';
+  const { label, subtitle } = theme.votes[vote];
   return (
     <span
       data-testid="vote-badge"
@@ -144,7 +146,10 @@ export function VoteBadge({ vote }: { vote: VoteId }) {
           : 'border-court-indigoLight bg-court-rebel text-court-rebelInk'
       }`}
     >
-      {theme.votes[vote].label}
+      <span aria-hidden>{label}</span>
+      <span className="sr-only">
+        {who ? theme.tv.voteSr(who, label, subtitle) : `${label} (${subtitle})`}
+      </span>
     </span>
   );
 }

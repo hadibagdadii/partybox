@@ -28,7 +28,7 @@ export function Stage({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('resize', onResize);
   }, []);
   return (
-    <div className="fixed inset-0 overflow-hidden bg-court-night">
+    <div className="no-select fixed inset-0 overflow-hidden bg-court-night">
       <div
         data-testid="tv-stage"
         className="absolute left-1/2 top-1/2 overflow-hidden bg-court-night text-court-parchment"

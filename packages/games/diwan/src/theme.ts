@@ -1,4 +1,12 @@
 import type { DecreeId, OfficeId, PowerId, RoleId, TeamId, VoteId } from './ids.js';
+import {
+  LEGISLATIVE_DRAW,
+  LOYAL_DECREES_TO_WIN,
+  REBEL_DECREES_TO_WIN,
+  UNREST_LIMIT,
+  USURPER_ELECTION_THRESHOLD,
+  VETO_UNLOCK,
+} from './rules.js';
 import type { Phase, WinReason } from './state.js';
 
 export interface VoteLabel {
@@ -20,18 +28,70 @@ const votes = {
 const electionTracker = 'Unrest';
 const chaos = 'Riot';
 const veto = 'Joint Veto';
+const teams = { loyal: 'Loyalists', rebel: 'Rebels' } satisfies Record<TeamId, string>;
+const usurper = 'The Usurper';
+const powers = {
+  investigate: 'Send a Spy',
+  specialElection: 'Name a Successor',
+  policyPeek: 'Read the Scrolls',
+  execution: 'Exile',
+} satisfies Record<PowerId, string>;
+
+export interface TutorialSlide {
+  title: string;
+  /** Shown on the TV slide and in the phone's rules summary. */
+  body: string;
+  /** One short line the herald reads aloud; also the caption. */
+  herald: string;
+}
+
+/** The seven tutorial topics, in order. The phone's rules summary reuses them. */
+const tutorialSlides: readonly TutorialSlide[] = [
+  {
+    title: 'Two sides, one secret',
+    body: `Most of the court are ${teams.loyal}. A few are ${teams.rebel}, and one of them is ${usurper}. The ${teams.rebel} know each other; in larger courts ${usurper} does not know them. The ${teams.loyal} know no one.`,
+    herald: `${teams.loyal}, ${teams.rebel}, and one hidden Usurper.`,
+  },
+  {
+    title: `The ${offices.ameer} and the ${offices.wazir}`,
+    body: `Each round the title of ${offices.ameer} passes to the next courtier. The ${offices.ameer} nominates a ${offices.wazir}. The courtiers who just governed cannot be nominated as ${offices.wazir} straight away.`,
+    herald: `The ${offices.ameer} names a ${offices.wazir} each round.`,
+  },
+  {
+    title: `${votes.yes.label} or ${votes.no.label}`,
+    body: `Everyone votes at once: ${votes.yes.label} means yes, ${votes.no.label} means no. If more than half say ${votes.yes.label}, the pair govern. A tie fails.`,
+    herald: `Vote ${votes.yes.label} for yes, ${votes.no.label} for no.`,
+  },
+  {
+    title: 'Passing a decree',
+    body: `The ${offices.ameer} draws ${LEGISLATIVE_DRAW} decrees, discards 1 in secret, and hands 2 to the ${offices.wazir}. The ${offices.wazir} enacts 1. No one else sees the cards, so anyone may lie about them.`,
+    herald: `The ${offices.ameer} discards one. The ${offices.wazir} enacts one.`,
+  },
+  {
+    title: `${electionTracker} and ${chaos}s`,
+    body: `Every failed vote raises ${electionTracker}. At ${UNREST_LIMIT}, a ${chaos} breaks out: the top decree is enacted with no power, and ${electionTracker} resets.`,
+    herald: `Three failed votes, and the people ${chaos.toLowerCase()}.`,
+  },
+  {
+    title: 'Royal powers',
+    body: `Some Rebel Decrees give the ${offices.ameer} a power: ${powers.investigate}, ${powers.specialElection}, ${powers.policyPeek}, or ${powers.execution}. After ${VETO_UNLOCK} Rebel Decrees, the ${offices.wazir} may propose a ${veto}.`,
+    herald: 'Rebel Decrees grant royal powers.',
+  },
+  {
+    title: 'How to win',
+    body: `The ${teams.loyal} win with ${LOYAL_DECREES_TO_WIN} Loyal Decrees, or by exiling ${usurper}. The ${teams.rebel} win with ${REBEL_DECREES_TO_WIN} Rebel Decrees, or by making ${usurper} ${offices.wazir} once ${USURPER_ELECTION_THRESHOLD} Rebel Decrees are enacted.`,
+    herald: 'Trust carefully. The court is watching.',
+  },
+];
 
 /** Every player-facing Diwan string. Components and engine logic must not hardcode these. */
 export const theme = {
   gameName: 'Diwan',
-  teams: {
-    loyal: 'Loyalists',
-    rebel: 'Rebels',
-  } satisfies Record<TeamId, string>,
+  teams,
   roles: {
     loyal: 'Loyalist',
     rebel: 'Rebel',
-    usurper: 'The Usurper',
+    usurper,
   } satisfies Record<RoleId, string>,
   offices,
   decrees: {
@@ -41,12 +101,7 @@ export const theme = {
   votes,
   electionTracker,
   chaos,
-  powers: {
-    investigate: 'Send a Spy',
-    specialElection: 'Name a Successor',
-    policyPeek: 'Read the Scrolls',
-    execution: 'Exile',
-  } satisfies Record<PowerId, string>,
+  powers,
   veto,
   phases: {
     reveal: 'Role reveal',
@@ -142,6 +197,14 @@ export const theme = {
     gameOverTitle: (team: string) => `The ${team} prevail`,
     rolesTitle: 'Every allegiance',
     exiledTag: 'exiled',
+    playAgain: 'Play again',
+    leaveRoom: 'Leave the room',
+    leaveSure: 'Leave the room?',
+    leaveYes: 'Yes, leave',
+    about: 'About',
+    rulesTab: 'Rules',
+    recordTab: 'Court record',
+    startChoice: 'How shall the court begin?',
   },
   /** Public log sentences. */
   log: {
@@ -206,6 +269,34 @@ export const theme = {
     heraldVoice: 'Herald voice',
     heraldDefaultVoice: 'Default voice',
     newRoom: 'New room',
+    endGame: 'End game',
+    endGameSure: 'End the game for everyone? Roles stay secret and the court returns to the lobby.',
+    endGameYes: 'Yes, end the game',
+    cancel: 'Cancel',
+    about: 'About',
+    awayPrompt: (names: string) =>
+      `${names} has been away for a while. You can wait for them, or end the game.`,
+    awayWait: 'Wait',
+    voteSr: (name: string, label: string, subtitle: string) =>
+      `${name} voted ${label} (${subtitle})`,
+  },
+  /** Lobby tutorial: seven slides on the TV, driven from the VIP's phone. */
+  tutorial: {
+    slides: tutorialSlides,
+    startWith: 'Start with tutorial',
+    startNow: 'Start now',
+    next: 'Next',
+    back: 'Back',
+    skip: 'Skip',
+    begin: 'Start game',
+    watchTv: 'Watch the TV',
+    watchTvHint: 'The host is walking the court through the rules.',
+    progress: (n: number, total: number) => `${n} of ${total}`,
+    title: 'How to play',
+  },
+  /** The phone's rules summary, built from the tutorial slides. */
+  rules: {
+    title: 'Rules',
   },
   /** Court record: short, round-grouped summaries shared by the TV log and the phone. */
   record: {
@@ -251,6 +342,15 @@ export const theme = {
     exiled: (target: string) => `${target} is exiled from the court.`,
     gameOver: (team: string, reason: string) => `The ${team} prevail. ${reason}.`,
   },
-  attribution:
-    'Diwan is adapted from Secret Hitler by Max Temkin, Mike Boxleiter, Tommy Maranges, and Mackenzie Schubert, used under CC BY-NC-SA 4.0. Diwan is free and shared under the same license.',
+  about: {
+    title: 'About Diwan',
+    attribution:
+      'Diwan is adapted from Secret Hitler by Max Temkin, Mike Boxleiter, Tommy Maranges, and Mackenzie Schubert, licensed under CC BY-NC-SA 4.0. This adaptation is free and shared under the same license.',
+    licenseLink: 'Read the CC BY-NC-SA 4.0 license',
+    licenseUrl: 'https://creativecommons.org/licenses/by-nc-sa/4.0/',
+    licenseFileLabel: 'License file in the source:',
+    licenseFile: 'packages/games/diwan/LICENSE',
+    free: 'No ads. No paid features.',
+    back: 'Back',
+  },
 } as const;

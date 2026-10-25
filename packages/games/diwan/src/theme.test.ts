@@ -48,7 +48,18 @@ describe('theme', () => {
   });
 
   it('credits the original authors', () => {
-    expect(theme.attribution).toContain('Secret Hitler');
-    expect(theme.attribution).toContain('CC BY-NC-SA 4.0');
+    expect(theme.about.attribution).toBe(
+      'Diwan is adapted from Secret Hitler by Max Temkin, Mike Boxleiter, Tommy Maranges, and Mackenzie Schubert, licensed under CC BY-NC-SA 4.0. This adaptation is free and shared under the same license.',
+    );
+    expect(theme.about.licenseUrl).toBe('https://creativecommons.org/licenses/by-nc-sa/4.0/');
+  });
+
+  it('has seven short tutorial slides', () => {
+    expect(theme.tutorial.slides).toHaveLength(7);
+    for (const slide of theme.tutorial.slides) {
+      expect(slide.title).toBeTruthy();
+      expect(slide.body.length).toBeLessThan(260);
+      expect(slide.herald.length).toBeLessThan(70);
+    }
   });
 });

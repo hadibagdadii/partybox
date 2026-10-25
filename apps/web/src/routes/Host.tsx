@@ -66,7 +66,7 @@ export function Host() {
           </button>
         )}
         {error && <p className="text-2xl text-red-400">{error}</p>}
-        {!connected && <p className="text-2xl text-slate-500">Connecting to server…</p>}
+        {!connected && <p className="text-2xl text-slate-400">Connecting to server…</p>}
       </Screen>
     );
   }
@@ -74,11 +74,32 @@ export function Host() {
   const screens = gameScreens[view.room.gameId];
   const GameHost = (debug && screens?.HostDebug) || screens?.Host;
   const playing = view.room.phase !== 'lobby' && !!GameHost;
+  const endGame = () => {
+    setError(null);
+    socket.emit('game:end', {}, (result) => {
+      if (!result.ok) setError(result.error.message);
+    });
+  };
+
+  const Tutorial =
+    view.room.phase === 'lobby' && view.room.tutorial && !debug && screens?.HostTutorial;
+  if (Tutorial) {
+    return (
+      <>
+        <Tutorial room={view.room} game={null} newRoom={forget} />
+        {!connected && (
+          <p className="fixed left-1/2 top-4 z-50 -translate-x-1/2 rounded-full bg-red-900 px-6 py-2 text-xl text-white">
+            Reconnecting…
+          </p>
+        )}
+      </>
+    );
+  }
 
   if (playing && screens?.hostFullScreen && !debug) {
     return (
       <>
-        <GameHost room={view.room} game={view.game} newRoom={forget} />
+        <GameHost room={view.room} game={view.game} newRoom={forget} endGame={endGame} />
         {!connected && (
           <p className="fixed left-1/2 top-4 z-50 -translate-x-1/2 rounded-full bg-red-900 px-6 py-2 text-xl text-white">
             Reconnecting…
@@ -97,20 +118,21 @@ export function Host() {
         <Lobby room={view.room} games={view.games} Extras={screens?.HostLobbyExtras} />
       ) : (
         <>
-          <p className="absolute right-8 top-6 text-3xl font-bold tracking-widest text-slate-500">
+          <p className="absolute right-8 top-6 text-3xl font-bold tracking-widest text-slate-400">
             {view.room.code}
           </p>
           <WaitingOn room={view.room} ids={view.waitingOn} />
-          <GameHost room={view.room} game={view.game} />
+          <GameHost room={view.room} game={view.game} endGame={endGame} />
         </>
       )}
       <button
         type="button"
         onClick={forget}
-        className="absolute bottom-6 left-8 text-lg text-slate-600 hover:text-slate-400"
+        className="absolute bottom-6 left-8 text-lg text-slate-400 hover:text-slate-200"
       >
         New room
       </button>
+      {error && <p className="absolute bottom-16 text-2xl text-red-400">{error}</p>}
     </Screen>
   );
 }
@@ -162,6 +184,7 @@ function Lobby({
 }) {
   const socket = getSocket();
   const [botError, setBotError] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<string | null>(null);
   const missing = room.minPlayers - room.players.length;
 
   const report = (result: AckResult<object>) => {
@@ -175,6 +198,13 @@ function Lobby({
     setBotError(null);
     socket.emit('dev:start', {}, report);
   };
+
+  const remove = (playerId: string) => {
+    setBotError(null);
+    setRemoving(null);
+    socket.emit('room:kick', { playerId }, report);
+  };
+  const removingName = room.players.find((p) => p.id === removing)?.name;
 
   const pickGame = (gameId: string) => {
     setBotError(null);
@@ -220,19 +250,54 @@ function Lobby({
         {room.players.map((p) => (
           <li
             key={p.id}
-            className={`flex items-center gap-3 rounded-2xl px-6 py-3 text-3xl ${
-              p.connected ? 'bg-slate-800' : 'bg-slate-900 text-slate-500'
+            className={`flex items-center gap-3 rounded-2xl py-3 pl-6 pr-3 text-3xl ${
+              p.connected ? 'bg-slate-800' : 'bg-slate-900 text-slate-400'
             }`}
           >
-            {p.isVip && <span title="VIP">👑</span>}
+            {p.isVip && (
+              <span role="img" aria-label="VIP">
+                👑
+              </span>
+            )}
             {p.name}
             {p.isBot && <span className="rounded bg-slate-700 px-2 text-base">bot</span>}
             {!p.connected && (
               <span className="rounded bg-red-900 px-2 text-base text-red-100">disconnected</span>
             )}
+            <button
+              type="button"
+              aria-label={`Remove ${p.name}`}
+              onClick={() => setRemoving(p.id)}
+              className="flex h-12 w-12 items-center justify-center rounded-full text-2xl text-slate-300 hover:bg-slate-700"
+            >
+              <span aria-hidden>×</span>
+            </button>
           </li>
         ))}
       </ul>
+      {removing && removingName && (
+        <div
+          role="alertdialog"
+          aria-label={`Remove ${removingName}?`}
+          className="flex items-center gap-4 rounded-2xl border border-red-800 bg-slate-900 px-6 py-4 text-2xl"
+        >
+          <span>Remove {removingName} from the room?</span>
+          <button
+            type="button"
+            onClick={() => remove(removing)}
+            className="rounded-xl bg-red-700 px-5 py-2 font-semibold text-white"
+          >
+            Remove
+          </button>
+          <button
+            type="button"
+            onClick={() => setRemoving(null)}
+            className="rounded-xl border border-slate-500 px-5 py-2"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
       {import.meta.env.DEV && (
         <div className="flex items-center gap-4">
           <button
@@ -254,7 +319,7 @@ function Lobby({
             href={`/dev?code=${room.code}`}
             target="_blank"
             rel="noreferrer"
-            className="text-xl text-slate-500 underline"
+            className="text-xl text-slate-400 underline"
           >
             Open /dev phones
           </a>

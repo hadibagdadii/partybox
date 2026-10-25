@@ -55,22 +55,7 @@ export function Board({ view, sources, shown, unrest, moment }: BoardProps) {
         />
       </div>
       <div className="flex flex-1 flex-col items-center gap-8">
-        <section
-          aria-label={theme.electionTracker}
-          className={`flex flex-col items-center gap-3 rounded-card border-2 px-6 py-4 ${
-            riot
-              ? 'border-court-riot bg-court-riot/15 motion-safe:animate-shake'
-              : 'border-court-indigo bg-court-dusk/70'
-          }`}
-        >
-          <h3 className="text-tv-sm uppercase tracking-[0.15em] text-court-mist">
-            {theme.electionTracker}
-          </h3>
-          <Pips kind="unrest" value={unrest} max={UNREST_LIMIT} size={52} />
-          <p className="text-tv-sm" data-testid="unrest">
-            {unrest}/{UNREST_LIMIT}
-          </p>
-        </section>
+        <UnrestMeter value={unrest} riot={riot} />
         <div className="flex gap-6">
           <Pile label={theme.tv.draw} count={view.drawCount} />
           <Pile label={theme.tv.discard} count={view.discardCount} />
@@ -79,7 +64,7 @@ export function Board({ view, sources, shown, unrest, moment }: BoardProps) {
           className={`rounded-full border-2 px-5 py-1 text-tv-sm ${
             view.vetoUnlocked
               ? 'border-court-goldLight bg-court-gold/20 text-court-goldLight motion-safe:animate-pop'
-              : 'border-court-indigo text-court-indigoLight'
+              : 'border-court-indigo text-court-mist'
           }`}
         >
           {view.vetoUnlocked ? theme.tv.vetoUnlocked : theme.tv.vetoSlot}
@@ -89,7 +74,30 @@ export function Board({ view, sources, shown, unrest, moment }: BoardProps) {
   );
 }
 
-function Track({
+/** The unrest meter: pips plus a count, shaking while a Riot plays. */
+export function UnrestMeter({ value, riot = false }: { value: number; riot?: boolean }) {
+  return (
+    <section
+      aria-label={`${theme.electionTracker} ${value}/${UNREST_LIMIT}`}
+      className={`flex flex-col items-center gap-3 rounded-card border-2 px-6 py-4 ${
+        riot
+          ? 'border-court-riot bg-court-riot/15 motion-safe:animate-shake'
+          : 'border-court-indigo bg-court-dusk/70'
+      }`}
+    >
+      <h3 className="text-tv-sm uppercase tracking-[0.15em] text-court-mist">
+        {theme.electionTracker}
+      </h3>
+      <Pips kind="unrest" value={value} max={UNREST_LIMIT} size={52} />
+      <p className="text-tv-sm" data-testid="unrest">
+        {value}/{UNREST_LIMIT}
+      </p>
+    </section>
+  );
+}
+
+/** One decree track. Exported so the tutorial draws the very same track. */
+export function Track({
   decree,
   slots,
   view,

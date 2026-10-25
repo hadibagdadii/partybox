@@ -5,7 +5,7 @@ import {
   type PlayerViewMessage,
 } from '@partybox/shared';
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { LatticeBackground, Rosette12 } from '../games/diwan/ornaments';
 import { gameScreens } from '../games/registry';
 import { getSocket, useConnected, useOnConnect } from '../lib/socket';
@@ -20,6 +20,17 @@ interface SeatRef {
   code: string;
   token: string;
 }
+
+/** Commands a seated phone sends with an empty payload. */
+type SeatCommand =
+  | 'game:start'
+  | 'game:reset'
+  | 'game:playAgain'
+  | 'tutorial:start'
+  | 'tutorial:skip'
+  | 'room:leave';
+
+const REMOVED_MESSAGE = 'You were removed from the room';
 
 export function Play() {
   const socket = getSocket();
@@ -37,6 +48,7 @@ export function Play() {
   const [view, setView] = useState<PlayerViewMessage | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [removed, setRemoved] = useState(false);
   const debug = import.meta.env.DEV && params.get('debug') === '1';
   useWakeLock(view?.room.phase === 'playing');
 
@@ -54,17 +66,36 @@ export function Play() {
     };
   }, [socket]);
 
+  /** The seat is gone for good: forget the token so a refresh doesn't try to reclaim it. */
+  const dropSeat = useCallback(
+    (code: string, wasRemoved: boolean) => {
+      playerToken.clear(code, slot);
+      setSeat(null);
+      setView(null);
+      setRemoved(wasRemoved);
+    },
+    [slot],
+  );
+
+  useEffect(() => {
+    if (!seat) return;
+    const onRemoved = () => dropSeat(seat.code, true);
+    socket.on('player:removed', onRemoved);
+    return () => {
+      socket.off('player:removed', onRemoved);
+    };
+  }, [socket, seat, dropSeat]);
+
   // Reclaim the seat after a refresh, screen lock, or dropped connection.
   const resume = useCallback(() => {
     if (!seat) return;
     socket.emit('player:resume', { code: seat.code, playerToken: seat.token }, (result) => {
       if (result.ok) return;
-      playerToken.clear(seat.code, slot);
-      setSeat(null);
-      setView(null);
-      setError(result.error.message);
+      const wasRemoved = result.error.code === 'removed';
+      dropSeat(seat.code, wasRemoved);
+      if (!wasRemoved) setError(result.error.message);
     });
-  }, [socket, seat, slot]);
+  }, [socket, seat, dropSeat]);
   useOnConnect(socket, seat ? resume : null);
 
   const join = (e: FormEvent) => {
@@ -81,9 +112,16 @@ export function Play() {
     });
   };
 
-  const send = (event: 'game:start' | 'game:reset') => {
+  const send = (event: SeatCommand) => {
     setError(null);
     socket.emit(event, {}, (result) => {
+      if (!result.ok) setError(result.error.message);
+    });
+  };
+
+  const step = (dir: 'next' | 'back') => {
+    setError(null);
+    socket.emit('tutorial:step', { dir }, (result) => {
       if (!result.ok) setError(result.error.message);
     });
   };
@@ -109,6 +147,7 @@ export function Play() {
         view={view}
         act={act}
         send={send}
+        step={step}
         seatKey={playerTokenKey(seat.code, slot)}
         debug={debug}
       />
@@ -131,6 +170,28 @@ export function Play() {
     );
   }
 
+  if (removed) {
+    return (
+      <Screen>
+        <Rosette12 size={96} className="mx-auto text-court-gold" />
+        <p role="status" className="text-center font-display text-4xl text-court-goldLight">
+          {REMOVED_MESSAGE}
+        </p>
+        <BigButton
+          onClick={() => {
+            setRemoved(false);
+            setParams(slot ? { slot } : {}, { replace: true });
+          }}
+        >
+          Join a game
+        </BigButton>
+        <Link to="/about" className="text-center text-lg text-court-mist underline">
+          About
+        </Link>
+      </Screen>
+    );
+  }
+
   const canJoin = code.length === ROOM_CODE_LENGTH && name.trim().length > 0 && connected && !busy;
   return (
     <Screen>
@@ -147,7 +208,7 @@ export function Play() {
             spellCheck={false}
             inputMode="text"
             placeholder="BCDF"
-            className="min-h-16 w-full min-w-0 rounded-button border border-court-gold/40 bg-court-dusk px-4 text-center text-4xl font-bold uppercase tracking-[0.4em] text-court-parchment placeholder:text-court-indigoLight focus:border-court-goldLight focus:outline-none"
+            className="min-h-16 w-full min-w-0 rounded-button border border-court-gold/40 bg-court-dusk px-4 text-center text-4xl font-bold uppercase tracking-[0.4em] text-court-parchment placeholder:text-court-mist focus:border-court-goldLight focus:outline-none focus:ring-2 focus:ring-court-goldLight"
           />
         </label>
         <label className="flex flex-col gap-2">
@@ -157,7 +218,7 @@ export function Play() {
             onChange={(e) => setName(e.target.value.slice(0, PLAYER_NAME_MAX))}
             maxLength={PLAYER_NAME_MAX}
             autoComplete="nickname"
-            className="min-h-16 w-full min-w-0 rounded-button border border-court-gold/40 bg-court-dusk px-4 text-2xl text-court-parchment focus:border-court-goldLight focus:outline-none"
+            className="min-h-16 w-full min-w-0 rounded-button border border-court-gold/40 bg-court-dusk px-4 text-2xl text-court-parchment focus:border-court-goldLight focus:outline-none focus:ring-2 focus:ring-court-goldLight"
           />
         </label>
         <button
@@ -178,29 +239,40 @@ function Seated({
   view,
   act,
   send,
+  step,
   seatKey,
   debug,
 }: {
   view: PlayerViewMessage;
   act: (action: unknown) => Promise<void>;
-  send: (event: 'game:start' | 'game:reset') => void;
+  send: (event: SeatCommand) => void;
+  step: (dir: 'next' | 'back') => void;
   seatKey: string;
   debug: boolean;
 }) {
   const { room, you } = view;
   const screens = gameScreens[room.gameId];
-  const reset = room.phase === 'over' && you.isVip ? () => send('game:reset') : null;
+  const over = room.phase === 'over' && you.isVip;
+  const reset = over ? () => send('game:reset') : null;
+  const playAgain = over ? () => send('game:playAgain') : null;
 
   if (room.phase !== 'lobby' && screens) {
     const GamePlayer = (debug && screens.Debug) || screens.Player;
-    const props = { room, you, game: view.game, act, seatKey, reset };
+    const props = { room, you, game: view.game, act, seatKey, reset, playAgain };
     if (screens.fullScreen && !debug) return <GamePlayer {...props} />;
     return (
       <>
         <Header view={view} />
         <GamePlayer {...props} />
+        {playAgain && <BigButton onClick={playAgain}>Play again</BigButton>}
         {reset && <BigButton onClick={reset}>Back to lobby</BigButton>}
       </>
+    );
+  }
+
+  if (room.tutorial && screens?.Tutorial && !debug) {
+    return (
+      <screens.Tutorial room={room} you={you} step={step} skip={() => send('tutorial:skip')} />
     );
   }
 
@@ -211,6 +283,8 @@ function Seated({
         you={you}
         canStart={view.canStart}
         start={() => send('game:start')}
+        startTutorial={screens.Tutorial ? () => send('tutorial:start') : undefined}
+        leave={() => send('room:leave')}
       />
     );
   }
@@ -231,6 +305,13 @@ function Seated({
           {you.isVip ? 'Waiting for more players…' : 'Waiting for the VIP to start…'}
         </p>
       )}
+      <button
+        type="button"
+        onClick={() => send('room:leave')}
+        className="min-h-12 text-center text-lg text-court-mist underline"
+      >
+        Leave room
+      </button>
     </>
   );
 }

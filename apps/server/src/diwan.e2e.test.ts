@@ -55,6 +55,43 @@ describe('Diwan over real sockets', () => {
     }
   }, 20_000);
 
+  it('plays again with the same players in a reshuffled order', async () => {
+    const s = await start();
+    const tv = await s.client();
+    const tvLog = record(tv);
+    const { code } = await ok(tv.emitWithAck('room:create', {}));
+    const vip = await s.client();
+    await ok(vip.emitWithAck('room:join', { code, name: 'Amina' }));
+    for (let i = 0; i < 6; i++) await ok(tv.emitWithAck('dev:addBot', {}));
+    await ok(vip.emitWithAck('game:start', {}));
+    await until(() => tvLog.host.at(-1)?.room.phase === 'playing');
+    const order = tvLog.host.at(-1)!.room.players.map((p) => p.id);
+
+    // Diwan only ends by play; ending early and replaying must not count as "over".
+    expect(await vip.emitWithAck('game:playAgain', {})).toMatchObject({
+      ok: false,
+      error: { code: 'wrong_phase' },
+    });
+    // The VIP plays like a bot: the first legal action whenever the game waits on them.
+    // Repeats are harmless: the server rejects anything no longer legal.
+    vip.on('player:view', (v) => {
+      const action = (v.game as DiwanPlayerView | null)?.legalActions[0];
+      if (action && v.room.phase === 'playing') void vip.emitWithAck('game:action', { action });
+    });
+    await ok(vip.emitWithAck('game:action', { action: { type: 'acknowledge' } }));
+    await until(() => tvLog.host.at(-1)?.room.phase === 'over', 15_000);
+    vip.off('player:view');
+
+    await ok(vip.emitWithAck('game:playAgain', {}));
+    await until(() => (tvLog.host.at(-1)?.game as DiwanHostView | null)?.phase === 'reveal');
+    const next = tvLog.host.at(-1)!;
+    const ids = next.room.players.map((p) => p.id);
+    expect([...ids].sort()).toEqual([...order].sort());
+    expect(ids).not.toEqual(order);
+    expect((next.game as DiwanHostView).players.map((p) => p.id)).toEqual(ids);
+    expect((next.game as DiwanHostView).roles).toBeNull();
+  }, 20_000);
+
   it('waits on a disconnected human and resumes when they come back', async () => {
     const s = await start();
     const tv = await s.client();

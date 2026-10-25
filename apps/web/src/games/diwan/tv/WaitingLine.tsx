@@ -19,7 +19,7 @@ export function WaitingLine({
         {view.waitingOn.map((id, i) => (
           <span key={id}>
             {i > 0 && ', '}
-            <span className={away.has(id) ? 'text-court-danger' : 'text-court-parchment'}>
+            <span className={away.has(id) ? 'text-court-exile' : 'text-court-parchment'}>
               {name(id)}
               {away.has(id) && ` (${theme.tv.away})`}
             </span>

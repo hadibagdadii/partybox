@@ -59,12 +59,19 @@ export function DecreeCard({
       )}
     </span>
   );
-  if (!onSelect) return <div className="w-full">{body}</div>;
+  const label = selected && mark ? `${theme.decrees[decree]}, ${mark}` : theme.decrees[decree];
+  if (!onSelect) {
+    return (
+      <div className="w-full" role="img" aria-label={label}>
+        {body}
+      </div>
+    );
+  }
   return (
     <button
       type="button"
       aria-pressed={selected}
-      aria-label={theme.decrees[decree]}
+      aria-label={label}
       onClick={onSelect}
       className={`w-full rounded-card transition-transform duration-base ${
         selected

@@ -101,7 +101,7 @@ function Actions({
     if (isTargeted(a)) targeted.set(a.type, [...(targeted.get(a.type) ?? []), a.targetId]);
   }
   if (view.legalActions.length === 0) {
-    return <p className="text-center text-slate-500">Nothing to do right now.</p>;
+    return <p className="text-center text-slate-400">Nothing to do right now.</p>;
   }
 
   return (
@@ -156,7 +156,7 @@ function targetLabel(type: TargetType): string {
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="flex flex-col gap-1">
-      <h2 className="text-sm uppercase text-slate-500">{title}</h2>
+      <h2 className="text-sm uppercase text-slate-400">{title}</h2>
       {children}
     </section>
   );

@@ -10,6 +10,9 @@ export const colors = {
   indigoLight: '#3a4688',
   emerald: '#0f5c4a',
   emeraldLight: '#1f8a6e',
+  /** Emerald for text on night/dusk/indigo; emeraldLight is too dark for text there. */
+  emeraldText: '#45c29c',
+  emeraldDeep: '#0a4436',
   gold: '#d4a64a',
   goldLight: '#f0cf7e',
   goldDark: '#8f6a22',
@@ -27,7 +30,7 @@ export const colors = {
   /** Record and badge accents: each event kind gets its own hue. */
   riot: '#f08a3c',
   power: '#8fb3ff',
-  exile: '#e0656a',
+  exile: '#ec7d80',
   seal: '#9b2226',
   sealDark: '#6a1418',
 } as const;

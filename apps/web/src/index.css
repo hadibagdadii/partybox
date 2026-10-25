@@ -11,6 +11,22 @@
     @apply bg-court-night font-sans text-court-parchment antialiased;
     overscroll-behavior-y: none;
   }
+  /* One visible focus ring for keyboard users everywhere, light enough for the night palette. */
+  :focus-visible {
+    outline: 3px solid theme('colors.court.goldLight');
+    outline-offset: 3px;
+  }
+  /* No double-tap zoom on anything tappable; pinch zoom still works. */
+  a,
+  button,
+  input,
+  label,
+  select,
+  summary,
+  [role='button'],
+  [role='tab'] {
+    touch-action: manipulation;
+  }
 }
 
 @layer utilities {
@@ -24,11 +40,18 @@
     padding-left: max(env(safe-area-inset-left), 1rem);
     padding-right: max(env(safe-area-inset-right), 1rem);
   }
+  /* Held elements: no selection, no iOS callout or magnifier, no scroll or zoom gestures. */
   .no-callout {
     -webkit-touch-callout: none;
     -webkit-user-select: none;
     user-select: none;
     touch-action: none;
+  }
+  /* Game shells: nothing selects on a stray long-press, but taps and scrolling still work. */
+  .no-select {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
   }
 }
 
