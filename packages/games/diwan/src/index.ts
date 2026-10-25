@@ -1,21 +1,20 @@
 import type { GameModule } from '@partybox/shared';
-import { z } from 'zod';
+import { actionSchema, type DiwanAction } from './actions.js';
+import { reduce } from './reduce.js';
+import { MAX_PLAYERS, MIN_PLAYERS } from './rules.js';
+import { createInitialState } from './setup.js';
+import type { DiwanState, LogEntry } from './state.js';
+import { getHostView, getPlayerView, type DiwanHostView, type DiwanPlayerView } from './views.js';
 
 export * from './ids.js';
 export { theme } from './theme.js';
+export { actionSchema, type DiwanAction } from './actions.js';
+export { eligibleWazirIds, powerTargetIds } from './reduce.js';
+export { powerTrack } from './rules.js';
+export type * from './state.js';
+export type { DiwanHostView, DiwanPlayerView } from './views.js';
 
-// Placeholder types until the rules engine lands.
-export interface DiwanState {
-  playerIds: string[];
-}
-export type DiwanAction = never;
-export type DiwanEvent = never;
-export interface DiwanHostView {
-  playerCount: number;
-}
-export interface DiwanPlayerView extends DiwanHostView {
-  playerId: string;
-}
+export type DiwanEvent = LogEntry;
 
 export const diwanModule: GameModule<
   DiwanState,
@@ -26,12 +25,12 @@ export const diwanModule: GameModule<
 > = {
   id: 'diwan',
   displayName: 'Diwan',
-  minPlayers: 5,
-  maxPlayers: 10,
-  actionSchema: z.never(),
-  createInitialState: (players) => ({ playerIds: players.map((p) => p.id) }),
-  reduce: (state) => ({ ok: true, state, events: [] }),
-  getHostView: (state) => ({ playerCount: state.playerIds.length }),
-  getPlayerView: (state, playerId) => ({ playerCount: state.playerIds.length, playerId }),
-  isOver: () => false,
+  minPlayers: MIN_PLAYERS,
+  maxPlayers: MAX_PLAYERS,
+  actionSchema,
+  createInitialState,
+  reduce,
+  getHostView,
+  getPlayerView,
+  isOver: (state) => state.phase === 'over',
 };

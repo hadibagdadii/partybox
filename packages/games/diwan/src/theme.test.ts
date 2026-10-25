@@ -1,6 +1,4 @@
-import { createRng } from '@partybox/shared';
 import { describe, expect, it } from 'vitest';
-import { diwanModule } from './index.js';
 import { DECREE_IDS, OFFICE_IDS, POWER_IDS, ROLE_IDS, TEAM_IDS, VOTE_IDS } from './ids.js';
 import { theme } from './theme.js';
 
@@ -20,15 +18,5 @@ describe('theme', () => {
   it('credits the original authors', () => {
     expect(theme.attribution).toContain('Secret Hitler');
     expect(theme.attribution).toContain('CC BY-NC-SA 4.0');
-  });
-});
-
-describe('diwanModule stub', () => {
-  it('host view exposes only public info', () => {
-    const state = diwanModule.createInitialState(
-      ['a', 'b', 'c', 'd', 'e'].map((id) => ({ id, name: id })),
-      createRng(1),
-    );
-    expect(diwanModule.getHostView(state)).toEqual({ playerCount: 5 });
   });
 });
