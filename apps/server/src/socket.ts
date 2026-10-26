@@ -42,6 +42,8 @@ export interface SocketOptions {
   limits?: ServerConfig['limits'];
   /** Proxies in front of the server whose X-Forwarded-For entries are trusted. */
   trustProxyHops?: number;
+  /** Lowercased header a proxy sets to the client IP; wins over X-Forwarded-For. */
+  clientIpHeader?: string | undefined;
   logger?: Logger;
 }
 
@@ -219,7 +221,12 @@ export function registerSocketHandlers(
   io.on('connection', (socket) => {
     const { headers, address } = socket.handshake;
     const ipHash = hashIp(
-      clientIp(headers['x-forwarded-for'], address, options.trustProxyHops ?? 0),
+      clientIp(
+        headers['x-forwarded-for'],
+        address,
+        options.trustProxyHops ?? 0,
+        options.clientIpHeader ? headers[options.clientIpHeader] : undefined,
+      ),
     );
     socket.on('ping', (ack) => {
       if (typeof ack === 'function') ack({ ok: true, at: Date.now() });

@@ -10,6 +10,7 @@
     "dev": "concurrently -k -n server,web -c blue,magenta \"pnpm --filter @partybox/server dev\" \"pnpm --filter @partybox/web dev\"",
     "build": "pnpm -r build",
     "start": "pnpm --filter @partybox/server start",
+    "party": "node scripts/party.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:full": "PROPERTY_RUNS=1000 vitest run",

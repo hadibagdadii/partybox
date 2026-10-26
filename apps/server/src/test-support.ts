@@ -31,6 +31,7 @@ export function testConfig(overrides: Partial<ServerConfig> = {}): ServerConfig 
     maxRooms: 200,
     maxRoomsPerIp: 3,
     trustProxyHops: 0,
+    clientIpHeader: undefined,
     limits: DEFAULT_LIMITS,
     webDist: undefined,
     ...overrides,

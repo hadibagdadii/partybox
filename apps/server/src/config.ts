@@ -16,6 +16,8 @@ export interface ServerConfig {
   maxRoomsPerIp: number;
   /** Proxies in front of the server whose X-Forwarded-For entries we trust. */
   trustProxyHops: number;
+  /** Lowercased header a proxy sets to the client IP (e.g. cf-connecting-ip); wins over hops. */
+  clientIpHeader: string | undefined;
   limits: { createRoom: Limit; join: Limit };
   /** Built web app, served with SPA fallback when set. */
   webDist: string | undefined;
@@ -68,6 +70,7 @@ export function loadConfig(env: Env, defaults: { webDist?: string } = {}): Loade
       maxRooms: int('MAX_ROOMS', 200, 1),
       maxRoomsPerIp: int('MAX_ROOMS_PER_IP', 3, 1),
       trustProxyHops: int('TRUST_PROXY_HOPS', isProd ? 1 : 0),
+      clientIpHeader: env.CLIENT_IP_HEADER?.trim().toLowerCase() || undefined,
       limits: DEFAULT_LIMITS,
       // In dev, Vite serves the web app and proxies /healthz and /socket.io here.
       webDist: isProd ? (env.WEB_DIST ?? defaults.webDist) : undefined,

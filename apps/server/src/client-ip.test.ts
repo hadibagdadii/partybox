@@ -24,4 +24,14 @@ describe('clientIp', () => {
     expect(clientIp('203.0.113.9', '10.0.0.2', 3)).toBe('203.0.113.9');
     expect(clientIp(undefined, '10.0.0.2', 2)).toBe('10.0.0.2');
   });
+
+  it('prefers the trusted client IP header over X-Forwarded-For', () => {
+    expect(clientIp('6.6.6.6, 198.51.100.7', '127.0.0.1', 1, '203.0.113.9')).toBe('203.0.113.9');
+    expect(clientIp(undefined, '127.0.0.1', 1, ['::ffff:203.0.113.9'])).toBe('203.0.113.9');
+  });
+
+  it('falls back to X-Forwarded-For when the trusted header is missing or blank', () => {
+    expect(clientIp('203.0.113.9', '127.0.0.1', 1, undefined)).toBe('203.0.113.9');
+    expect(clientIp('203.0.113.9', '127.0.0.1', 1, ' ')).toBe('203.0.113.9');
+  });
 });

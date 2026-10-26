@@ -78,6 +78,7 @@ export function createPartyboxServer(
     bots: config.devTools ? config.bots : undefined,
     limits: config.limits,
     trustProxyHops: config.trustProxyHops,
+    clientIpHeader: config.clientIpHeader,
     logger,
   });
 

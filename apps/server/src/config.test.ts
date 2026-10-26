@@ -29,6 +29,7 @@ describe('loadConfig', () => {
       maxRooms: 200,
       maxRoomsPerIp: 3,
       trustProxyHops: 1,
+      clientIpHeader: undefined,
       allowedOrigin: undefined,
       webDist: '/srv/web',
     });
@@ -44,12 +45,14 @@ describe('loadConfig', () => {
       MAX_ROOMS: '50',
       MAX_ROOMS_PER_IP: '5',
       TRUST_PROXY_HOPS: '2',
+      CLIENT_IP_HEADER: ' CF-Connecting-IP ',
     });
     expect(config).toMatchObject({
       allowedOrigin: 'https://diwan.example.com',
       maxRooms: 50,
       maxRoomsPerIp: 5,
       trustProxyHops: 2,
+      clientIpHeader: 'cf-connecting-ip',
     });
   });
 

@@ -1,0 +1,26 @@
+# Render Blueprint: one free Docker web service. See DEPLOY.md ("Render free tier").
+# Rooms live in memory, so this must stay a single instance.
+services:
+  - type: web
+    name: partybox
+    runtime: docker
+    plan: free
+    branch: main
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    autoDeployTrigger: commit
+    numInstances: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Render sits behind Cloudflare, which overwrites CF-Connecting-IP with the
+      # visitor's address. Render's docs give no hop count for X-Forwarded-For.
+      - key: CLIENT_IP_HEADER
+        value: cf-connecting-ip
+      # Fallback only, used if a request ever arrives without CF-Connecting-IP.
+      - key: TRUST_PROXY_HOPS
+        value: '1'
+      # Set after the first deploy to https://<name>.onrender.com (no trailing slash).
+      - key: ALLOWED_ORIGIN
+        sync: false
