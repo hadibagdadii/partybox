@@ -51,6 +51,7 @@ export function createPartyboxServer(
     webDist: config.webDist,
     trustProxyHops: config.trustProxyHops,
     allowedOrigin: config.allowedOrigin,
+    joinDisplayUrl: config.joinDisplayUrl,
     logger,
   });
   const httpServer = createServer(app);

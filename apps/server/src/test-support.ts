@@ -28,6 +28,7 @@ export function testConfig(overrides: Partial<ServerConfig> = {}): ServerConfig 
     devTools: true,
     bots: undefined,
     allowedOrigin: undefined,
+    joinDisplayUrl: undefined,
     maxRooms: 200,
     maxRoomsPerIp: 3,
     trustProxyHops: 0,

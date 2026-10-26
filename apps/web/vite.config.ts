@@ -10,6 +10,7 @@ export default defineConfig({
     host: true, // reachable from phones on the LAN
     proxy: {
       '/healthz': serverUrl,
+      '/api': serverUrl,
       '/socket.io': { target: serverUrl, ws: true },
     },
   },

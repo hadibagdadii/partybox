@@ -2,6 +2,8 @@ import type { DecreeId, OfficeId, PowerId, RoleId, TeamId, VoteId } from './ids.
 import {
   LEGISLATIVE_DRAW,
   LOYAL_DECREES_TO_WIN,
+  MAX_PLAYERS,
+  MIN_PLAYERS,
   REBEL_DECREES_TO_WIN,
   UNREST_LIMIT,
   USURPER_ELECTION_THRESHOLD,
@@ -341,6 +343,23 @@ export const theme = {
       target ? `${ameer} uses ${power} on ${target}.` : `${ameer} uses ${power}.`,
     exiled: (target: string) => `${target} is exiled from the court.`,
     gameOver: (team: string, reason: string) => `The ${team} prevail. ${reason}.`,
+  },
+  landing: {
+    title: 'Diwan',
+    pitch:
+      "A hidden-role game of loyalty and betrayal in the Sultan's court. One screen everyone can see, everyone plays on their phone.",
+    host: 'Host a game',
+    hostNote: 'Open this on a TV or laptop the whole group can see.',
+    join: 'Join a game',
+    joinButton: 'Join',
+    howItWorks: 'How it works',
+    steps: [
+      'Open Diwan on a TV or laptop and host a game.',
+      'Everyone scans the QR code or enters the room code on their phone.',
+      'Play: the court gathers on the big screen, secrets stay on your phone.',
+    ],
+    players: `${MIN_PLAYERS} to ${MAX_PLAYERS} players`,
+    about: 'About',
   },
   about: {
     title: 'About Diwan',

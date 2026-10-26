@@ -1,20 +1,12 @@
-import {
-  PLAYER_NAME_MAX,
-  ROOM_CODE_ALPHABET,
-  ROOM_CODE_LENGTH,
-  type PlayerViewMessage,
-} from '@partybox/shared';
+import { PLAYER_NAME_MAX, type PlayerViewMessage } from '@partybox/shared';
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { LatticeBackground, Rosette12 } from '../games/diwan/ornaments';
 import { gameScreens } from '../games/registry';
 import { getSocket, useConnected, useOnConnect } from '../lib/socket';
-import { parseSlot, playerToken, playerTokenKey } from '../lib/storage';
+import { cleanCode, isFullCode } from '../lib/room-code';
+import { lastName, parseSlot, playerToken, playerTokenKey } from '../lib/storage';
 import { useWakeLock } from '../lib/wake-lock';
-
-const notInAlphabet = new RegExp(`[^${ROOM_CODE_ALPHABET}]`, 'g');
-const cleanCode = (raw: string) =>
-  raw.toUpperCase().replace(notInAlphabet, '').slice(0, ROOM_CODE_LENGTH);
 
 interface SeatRef {
   code: string;
@@ -40,9 +32,11 @@ export function Play() {
   const urlCode = cleanCode(params.get('code') ?? '');
 
   const [code, setCode] = useState(urlCode);
-  const [name, setName] = useState('');
+  const [name, setName] = useState(() => lastName.get().slice(0, PLAYER_NAME_MAX));
+  // A scanned or shared link already carries the code: show it, and just ask for a name.
+  const [editingCode, setEditingCode] = useState(!isFullCode(urlCode));
   const [seat, setSeat] = useState<SeatRef | null>(() => {
-    const token = urlCode.length === ROOM_CODE_LENGTH ? playerToken.get(urlCode, slot) : null;
+    const token = isFullCode(urlCode) ? playerToken.get(urlCode, slot) : null;
     return token ? { code: urlCode, token } : null;
   });
   const [view, setView] = useState<PlayerViewMessage | null>(null);
@@ -106,6 +100,7 @@ export function Play() {
       setBusy(false);
       if (!result.ok) return setError(result.error.message);
       playerToken.set(result.code, slot, result.playerToken);
+      lastName.set(name.trim());
       // Keep the code in the URL so a refresh finds the stored token.
       setParams(slot ? { code: result.code, slot } : { code: result.code }, { replace: true });
       setSeat({ code: result.code, token: result.playerToken });
@@ -192,25 +187,47 @@ export function Play() {
     );
   }
 
-  const canJoin = code.length === ROOM_CODE_LENGTH && name.trim().length > 0 && connected && !busy;
+  const canJoin = isFullCode(code) && name.trim().length > 0 && connected && !busy;
   return (
     <Screen>
       <Rosette12 size={96} className="mx-auto text-court-gold motion-safe:animate-spin-slow" />
       <h1 className="text-center font-display text-5xl text-court-goldLight">Join a game</h1>
       <form onSubmit={join} className="flex flex-col gap-4">
-        <label className="flex flex-col gap-2">
-          <span className="text-lg text-court-mist">Room code</span>
-          <input
-            value={code}
-            onChange={(e) => setCode(cleanCode(e.target.value))}
-            autoCapitalize="characters"
-            autoComplete="off"
-            spellCheck={false}
-            inputMode="text"
-            placeholder="BCDF"
-            className="min-h-16 w-full min-w-0 rounded-button border border-court-gold/40 bg-court-dusk px-4 text-center text-4xl font-bold uppercase tracking-[0.4em] text-court-parchment placeholder:text-court-mist focus:border-court-goldLight focus:outline-none focus:ring-2 focus:ring-court-goldLight"
-          />
-        </label>
+        {editingCode ? (
+          <label className="flex flex-col gap-2">
+            <span className="text-lg text-court-mist">Room code</span>
+            <input
+              value={code}
+              onChange={(e) => setCode(cleanCode(e.target.value))}
+              autoFocus={isFullCode(urlCode)}
+              autoCapitalize="characters"
+              autoComplete="off"
+              spellCheck={false}
+              inputMode="text"
+              placeholder="BCDF"
+              className="min-h-16 w-full min-w-0 rounded-button border border-court-gold/40 bg-court-dusk px-4 text-center text-4xl font-bold uppercase tracking-[0.4em] text-court-parchment placeholder:text-court-mist focus:border-court-goldLight focus:outline-none focus:ring-2 focus:ring-court-goldLight"
+            />
+          </label>
+        ) : (
+          <p className="flex min-h-12 items-center justify-center gap-3 text-xl text-court-mist">
+            <span>
+              Room{' '}
+              <span
+                aria-label="Room code"
+                className="font-bold tracking-[0.3em] text-court-parchment"
+              >
+                {code}
+              </span>
+            </span>
+            <button
+              type="button"
+              onClick={() => setEditingCode(true)}
+              className="min-h-12 px-2 text-lg text-court-goldLight underline"
+            >
+              Change
+            </button>
+          </p>
+        )}
         <label className="flex flex-col gap-2">
           <span className="text-lg text-court-mist">Your name</span>
           <input
@@ -218,6 +235,7 @@ export function Play() {
             onChange={(e) => setName(e.target.value.slice(0, PLAYER_NAME_MAX))}
             maxLength={PLAYER_NAME_MAX}
             autoComplete="nickname"
+            autoFocus={!editingCode}
             className="min-h-16 w-full min-w-0 rounded-button border border-court-gold/40 bg-court-dusk px-4 text-2xl text-court-parchment focus:border-court-goldLight focus:outline-none focus:ring-2 focus:ring-court-goldLight"
           />
         </label>

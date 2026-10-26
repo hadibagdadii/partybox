@@ -1,12 +1,14 @@
 import type { HostViewMessage, LobbyView, PlayerViewMessage } from '@partybox/shared';
 import { theme } from '@partybox/diwan';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AppRoutes } from './App';
 import { fixtureRoom, scenes } from './games/diwan/tv/fixtures';
+import { resetConfigCache } from './lib/config';
 import { getSocket } from './lib/socket';
 import { parseSlot, playerTokenKey } from './lib/storage';
+import { decodeQrSvg } from './test/decode-qr';
 
 // Pages talk to the server through this module; keep tests offline.
 vi.mock('./lib/socket', () => {
@@ -30,7 +32,29 @@ afterEach(cleanup);
 describe('AppRoutes', () => {
   it('renders the landing page at /', () => {
     renderAt('/');
-    expect(screen.getByRole('heading', { name: 'Partybox' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: theme.landing.title })).toBeTruthy();
+    expect(screen.getByText(theme.landing.pitch)).toBeTruthy();
+    expect(screen.getByText(theme.landing.players)).toBe(screen.getByText('5 to 10 players'));
+    expect(screen.getAllByRole('listitem')).toHaveLength(3);
+  });
+
+  it('sends hosts from the landing page to /host', () => {
+    renderAt('/');
+    fireEvent.click(screen.getByRole('link', { name: theme.landing.host }));
+    expect(screen.getByRole('heading', { name: 'Host screen' })).toBeTruthy();
+  });
+
+  it('joins from the landing page with the typed code', () => {
+    renderAt('/');
+    const input = screen.getByLabelText<HTMLInputElement>('Room code');
+    const join = screen.getByRole<HTMLButtonElement>('button', { name: theme.landing.joinButton });
+    fireEvent.change(input, { target: { value: 'bc' } });
+    expect(join.disabled).toBe(true);
+    fireEvent.change(input, { target: { value: 'bc-df9' } });
+    expect(input.value).toBe('BCDF');
+    fireEvent.click(join);
+    expect(screen.getByRole('heading', { name: 'Join a game' })).toBeTruthy();
+    expect(screen.getByLabelText('Room code').textContent).toBe('BCDF');
   });
 
   it('renders the host screen with a create button at /host', () => {
@@ -44,9 +68,18 @@ describe('AppRoutes', () => {
     expect(screen.getByRole('heading', { name: 'Join a game' })).toBeTruthy();
   });
 
-  it('prefills the room code from ?code=', () => {
+  it('prefills the room code from ?code= and makes the name the only field', () => {
     renderAt('/play?code=bcdf');
+    expect(screen.getByLabelText('Room code').textContent).toBe('BCDF');
+    expect(document.activeElement).toBe(screen.getByLabelText('Your name'));
+    fireEvent.click(screen.getByRole('button', { name: 'Change' }));
     expect(screen.getByLabelText<HTMLInputElement>('Room code').value).toBe('BCDF');
+  });
+
+  it('asks for the code first without ?code=', () => {
+    renderAt('/play');
+    expect(screen.getByLabelText<HTMLInputElement>('Room code').value).toBe('');
+    expect(document.activeElement).not.toBe(screen.getByLabelText('Your name'));
   });
 
   it('links to About from the landing page', () => {
@@ -63,7 +96,7 @@ describe('AppRoutes', () => {
     expect(link.getAttribute('href')).toBe(theme.about.licenseUrl);
     expect(screen.getByText(theme.about.licenseFile)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: theme.about.back }));
-    expect(screen.getByRole('heading', { name: 'Partybox' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: theme.landing.title })).toBeTruthy();
   });
 
   it('renders one iframe per slot at /dev', () => {
@@ -125,6 +158,98 @@ describe('Diwan host screen', () => {
     sendHostView();
     expect(screen.queryByTestId('tv-stage')).toBeNull();
     expect(screen.getByRole('heading', { name: /Diwan · Nomination/ })).toBeTruthy();
+  });
+});
+
+describe('remembered name', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  function stubStorage(entries: [string, string][] = []) {
+    const saved = new Map(entries);
+    vi.stubGlobal('localStorage', {
+      getItem: (k: string) => saved.get(k) ?? null,
+      setItem: (k: string, v: string) => saved.set(k, v),
+      removeItem: (k: string) => saved.delete(k),
+    });
+    return saved;
+  }
+
+  it('prefills the last name used', () => {
+    stubStorage([['partybox:lastName', 'Amina']]);
+    renderAt('/play?code=BCDF');
+    expect(screen.getByLabelText<HTMLInputElement>('Your name').value).toBe('Amina');
+  });
+
+  it('remembers the name after a successful join', () => {
+    const saved = stubStorage();
+    renderAt('/play?code=BCDF');
+    fireEvent.change(screen.getByLabelText('Your name'), { target: { value: '  Yusuf ' } });
+    fireEvent.submit(screen.getByLabelText('Your name').closest('form')!);
+    const emit = vi.mocked(getSocket().emit);
+    const [event, payload, ack] = emit.mock.calls.at(-1) as unknown as [
+      string,
+      unknown,
+      (r: unknown) => void,
+    ];
+    expect(event).toBe('room:join');
+    expect(payload).toEqual({ code: 'BCDF', name: '  Yusuf ' });
+    act(() => ack({ ok: true, code: 'BCDF', playerToken: '00000000-0000-4000-8000-000000000000' }));
+    expect(saved.get('partybox:lastName')).toBe('Yusuf');
+  });
+});
+
+describe('host lobby join panel', () => {
+  function stubConfig(joinDisplayUrl: string | null) {
+    resetConfigCache();
+    vi.stubGlobal('localStorage', {
+      getItem: (k: string) =>
+        k === 'partybox:host' ? JSON.stringify({ code: 'DMWN', hostToken: 't' }) : null,
+      setItem: () => undefined,
+      removeItem: () => undefined,
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: true, json: async () => ({ joinDisplayUrl }) })),
+    );
+  }
+
+  function sendLobby() {
+    const room: LobbyView = { ...fixtureRoom(scenes.nominate.view), phase: 'lobby', code: 'DMWN' };
+    const on = vi.mocked(getSocket().on);
+    const handler = on.mock.calls.filter(([event]) => event === 'host:view').at(-1)?.[1] as (
+      m: HostViewMessage,
+    ) => void;
+    act(() => handler({ room, games: [], waitingOn: [], game: null }));
+  }
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('shows a QR that scans to the exact join URL', () => {
+    stubConfig(null);
+    renderAt('/host');
+    sendLobby();
+    expect(screen.getByText('Scan to join')).toBeTruthy();
+    const qr = screen.getByRole('img', { name: 'Scan to join' });
+    expect(decodeQrSvg(qr)).toBe(`${window.location.origin}/play?code=DMWN`);
+  });
+
+  it('shows JOIN_DISPLAY_URL and the code when the server has one', async () => {
+    stubConfig('party.example');
+    renderAt('/host');
+    sendLobby();
+    const line = screen.getByTestId('join-fallback');
+    await waitFor(() => expect(line.textContent).toBe('Or go to party.example and enter DMWN'));
+    expect(fetch).toHaveBeenCalledWith('/api/config');
+  });
+
+  it('shows the real join URL when JOIN_DISPLAY_URL is unset', async () => {
+    stubConfig(null);
+    renderAt('/host');
+    sendLobby();
+    await waitFor(() => expect(fetch).toHaveBeenCalled());
+    expect(screen.getByTestId('join-fallback').textContent).toBe(
+      `Or go to ${window.location.origin}/play?code=DMWN`,
+    );
   });
 });
 

@@ -39,6 +39,12 @@ export const playerToken = {
   clear: (code: string, slot: string | null) => remove(playerTokenKey(code, slot)),
 };
 
+/** The name this device last joined with, prefilled next time. */
+export const lastName = {
+  get: () => read('partybox:lastName') ?? '',
+  set: (name: string) => write('partybox:lastName', name),
+};
+
 export interface HostSession {
   code: string;
   hostToken: string;

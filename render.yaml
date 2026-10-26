@@ -24,3 +24,7 @@ services:
       # Set after the first deploy to https://<name>.onrender.com (no trailing slash).
       - key: ALLOWED_ORIGIN
         sync: false
+      # Optional short address the TV lobby shows as text, e.g. partybox.fun.
+      # Display only; the QR code always uses the page's real origin.
+      - key: JOIN_DISPLAY_URL
+        sync: false

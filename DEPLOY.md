@@ -25,13 +25,14 @@ Runs the production build on your Mac and gives it a public HTTPS URL through a 
 
    This builds the app, starts the server on port 8080, opens a tunnel, and runs `caffeinate -d` so the display doesn't sleep. When the tunnel is live it prints the `https://<random>.trycloudflare.com/host` URL in large text.
 
-3. Open that `/host` URL on the TV and press **Create room**. Phones join with the code, or at the `/play` link shown on the TV.
+3. Open that `/host` URL on the TV and press **Create room**. Phones scan the QR code on the TV, or join with the code at the `/play` link shown next to it.
 4. When the night is over, press **Ctrl+C** in the terminal. That stops the server, the tunnel, and caffeinate, and ends every game.
 
 Notes:
 
 - The URL is new every run, and only works while `pnpm party` is running.
 - Keep the laptop plugged in with the lid open. Closing the lid or losing Wi-Fi drops everyone.
+- Phones can scan the QR code on the TV lobby; it always points at the tunnel URL. `JOIN_DISPLAY_URL` isn't set here, so the TV shows the full `/play?code=` link as the fallback.
 - No variables to set. The script runs with `NODE_ENV=production`, `PORT=8080`, `CLIENT_IP_HEADER=cf-connecting-ip`, and `TRUST_PROXY_HOPS=1`. cloudflared connects to the server from localhost; Cloudflare's edge overwrites `CF-Connecting-IP` with the visitor's IP and appends it as the last `X-Forwarded-For` entry, so both give the real client. cloudflared passes the `trycloudflare.com` host through, so the same-origin check passes without `ALLOWED_ORIGIN`.
 - If the script prints `brew install cloudflared`, cloudflared isn't on your `PATH` yet.
 
@@ -62,6 +63,14 @@ Notes:
 | `ALLOWED_ORIGIN`   | your service URL   | Allows that exact origin. The site's own origin works anyway.                                                                  |
 | `CLIENT_IP_HEADER` | `cf-connecting-ip` | Render's public services sit behind Cloudflare, which overwrites this header with the visitor's IP, so clients can't spoof it. |
 | `TRUST_PROXY_HOPS` | `1`                | Fallback only. Render doesn't document how many proxies add `X-Forwarded-For` entries, so the server doesn't rely on it.       |
+
+Optional:
+
+| Variable           | Value                       | Why                                                                                                                                            |
+| ------------------ | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `JOIN_DISPLAY_URL` | a short address you control | The TV lobby shows "Or go to `<JOIN_DISPLAY_URL>` and enter `<CODE>`" next to the QR code. Unset, it shows the full `/play?code=` URL instead. |
+
+`JOIN_DISPLAY_URL` is display text only, read by the server at runtime (no rebuild needed; saving it redeploys). Point it at something that redirects to this service, such as a custom domain or a short link. The QR code never uses it: it always encodes the page's own origin, so it works on Render, the laptop tunnel, and dev alike.
 
 Don't set `PORT`. Render provides it, and the server listens on it.
 
@@ -107,6 +116,7 @@ Service → **Variables**:
 | `MAX_ROOMS_PER_IP` | default `3`                               | Optional. Rooms one network can hold open.                                                                         |
 | `TRUST_PROXY_HOPS` | default `1`                               | Optional. Proxies in front of the app whose `X-Forwarded-For` entry is trusted. See step 5.                        |
 | `CLIENT_IP_HEADER` | unset                                     | Optional. A header a proxy overwrites with the client IP (e.g. `cf-connecting-ip`). Wins over `TRUST_PROXY_HOPS`.  |
+| `JOIN_DISPLAY_URL` | unset                                     | Optional. Short address the TV lobby shows as text next to the QR code. See [Render free tier](#render-free-tier). |
 
 Don't set `PORT`: Railway injects it and the server listens on it. Don't set `BOT_MIN_DELAY_MS` / `BOT_MAX_DELAY_MS`: they're ignored in production anyway.
 

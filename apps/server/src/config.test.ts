@@ -32,6 +32,7 @@ describe('loadConfig', () => {
       clientIpHeader: undefined,
       allowedOrigin: undefined,
       webDist: '/srv/web',
+      joinDisplayUrl: undefined,
     });
     expect(config.limits.createRoom).toEqual({ max: 10, windowMs: 600_000 });
     expect(config.limits.join).toEqual({ max: 30, windowMs: 60_000 });
@@ -54,6 +55,13 @@ describe('loadConfig', () => {
       trustProxyHops: 2,
       clientIpHeader: 'cf-connecting-ip',
     });
+  });
+
+  it('reads JOIN_DISPLAY_URL at runtime, trimmed, and treats blank as unset', () => {
+    expect(loadConfig({ JOIN_DISPLAY_URL: ' partybox.fun/ ' }).config.joinDisplayUrl).toBe(
+      'partybox.fun',
+    );
+    expect(loadConfig({ JOIN_DISPLAY_URL: '  ' }).config.joinDisplayUrl).toBeUndefined();
   });
 
   it('trusts no proxy in development, and allows 0 hops in production', () => {

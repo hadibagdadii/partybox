@@ -39,7 +39,7 @@ In dev, the host lobby has a game picker (Tap Race is dev-only) and **Add bot** 
 `partybox:ABCD:slotN` so the iframes get separate seats.
 
 To join from real phones on your Wi-Fi, open the TV at your LAN address (Vite prints it as
-`Network:`), or set `VITE_PUBLIC_URL` so the join link on the TV points there.
+`Network:`). The QR code and join link on the TV use the page's own origin, so they point there.
 
 ## Deploying
 

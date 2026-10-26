@@ -1,7 +1,10 @@
 import type { AckResult, GameOption, HostViewMessage, LobbyView } from '@partybox/shared';
 import { useCallback, useEffect, useState, type ComponentType, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { JoinQr } from '../components/JoinQr';
 import { gameScreens } from '../games/registry';
+import { useJoinDisplayUrl } from '../lib/config';
+import { joinPath, joinUrl } from '../lib/room-code';
 import { getSocket, useConnected, useOnConnect } from '../lib/socket';
 import { hostSession, type HostSession } from '../lib/storage';
 
@@ -145,11 +148,6 @@ function Screen({ children }: { children: ReactNode }) {
   );
 }
 
-function joinUrl(code: string): string {
-  const base = import.meta.env.VITE_PUBLIC_URL ?? window.location.origin;
-  return `${base.replace(/\/$/, '')}/play?code=${code}`;
-}
-
 /** Who the game is waiting on, flagging anyone whose phone has dropped. */
 function WaitingOn({ room, ids }: { room: LobbyView; ids: string[] }) {
   if (ids.length === 0) return null;
@@ -169,6 +167,49 @@ function WaitingOn({ room, ids }: { room: LobbyView; ids: string[] }) {
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+/** Room code, QR, and the typed fallback, side by side so the QR stays big. */
+function JoinPanel({ code }: { code: string }) {
+  const displayUrl = useJoinDisplayUrl();
+  const url = joinUrl(code);
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-16">
+      <div className="flex max-w-4xl flex-col items-center gap-6 text-center">
+        <p className="text-3xl text-slate-400">Room code</p>
+        <p
+          aria-label="Room code"
+          className="text-[10rem] font-black leading-none tracking-[0.2em] text-amber-400"
+        >
+          {code}
+        </p>
+        <p data-testid="join-fallback" className="text-3xl text-slate-300">
+          {displayUrl ? (
+            <>
+              Or go to <span className="font-semibold text-slate-100">{displayUrl}</span> and enter{' '}
+              <span className="font-semibold text-slate-100">{code}</span>
+            </>
+          ) : (
+            <>
+              Or go to{' '}
+              <span className="font-semibold text-slate-100">
+                {/* Long origins wrap before /play, never inside the code. */}
+                {window.location.origin}
+                <wbr />
+                <span className="whitespace-nowrap">{joinPath(code)}</span>
+              </span>
+            </>
+          )}
+        </p>
+      </div>
+      <figure className="flex flex-col items-center gap-4">
+        <div className="rounded-3xl bg-white p-3 shadow-2xl">
+          <JoinQr url={url} className="block h-[min(24rem,40vh)] w-[min(24rem,40vh)]" />
+        </div>
+        <figcaption className="text-3xl font-semibold text-slate-200">Scan to join</figcaption>
+      </figure>
     </div>
   );
 }
@@ -213,16 +254,7 @@ function Lobby({
 
   return (
     <>
-      <div className="flex flex-col items-center gap-2">
-        <p className="text-3xl text-slate-400">Join at</p>
-        <p className="text-4xl font-semibold">{joinUrl(room.code)}</p>
-      </div>
-      <p
-        aria-label="Room code"
-        className="text-[12rem] font-black leading-none tracking-[0.2em] text-amber-400"
-      >
-        {room.code}
-      </p>
+      <JoinPanel code={room.code} />
       {games.length > 1 && (
         <div role="radiogroup" aria-label="Game" className="flex gap-3">
           {games.map((g) => (

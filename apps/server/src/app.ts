@@ -11,6 +11,8 @@ export interface AppOptions {
   trustProxyHops?: number;
   /** Extra origin the page may open sockets to, besides its own. */
   allowedOrigin?: string | undefined;
+  /** Short join address for the TV to show; sent by /api/config. */
+  joinDisplayUrl?: string | undefined;
   logger?: Logger;
 }
 
@@ -39,6 +41,7 @@ export function createApp({
   webDist,
   trustProxyHops = 0,
   allowedOrigin,
+  joinDisplayUrl,
   logger = silentLogger,
 }: AppOptions = {}): Express {
   const app = express();
@@ -48,6 +51,12 @@ export function createApp({
 
   app.get('/healthz', (_req, res) => {
     res.json({ ok: true });
+  });
+
+  // Read at runtime, so one build serves any deployment.
+  app.get('/api/config', (_req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.json({ joinDisplayUrl: joinDisplayUrl ?? null });
   });
 
   if (webDist && existsSync(webDist)) {

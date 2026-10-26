@@ -21,6 +21,8 @@ export interface ServerConfig {
   limits: { createRoom: Limit; join: Limit };
   /** Built web app, served with SPA fallback when set. */
   webDist: string | undefined;
+  /** Short join address the TV shows as text (e.g. partybox.fun). Display only. */
+  joinDisplayUrl: string | undefined;
 }
 
 export interface LoadedConfig {
@@ -74,6 +76,7 @@ export function loadConfig(env: Env, defaults: { webDist?: string } = {}): Loade
       limits: DEFAULT_LIMITS,
       // In dev, Vite serves the web app and proxies /healthz and /socket.io here.
       webDist: isProd ? (env.WEB_DIST ?? defaults.webDist) : undefined,
+      joinDisplayUrl: env.JOIN_DISPLAY_URL?.trim().replace(/\/+$/, '') || undefined,
     },
   };
 }
