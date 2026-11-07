@@ -26,6 +26,12 @@ Jackbox-style party game platform. A TV (host screen) shows the shared game; pla
 
 All player-facing strings come from packages/games/diwan/src/theme.ts. Never hardcode team, role, or decree names in components or engine logic. Engine uses neutral ids: `loyal`, `rebel`, `usurper`, `ameer`, `wazir`.
 
+## Cambio
+
+- The rules live in packages/games/cambio/RULES.md, including its Engine notes for cases the spec leaves open. The engine and tests must match it; change RULES.md first when a rule changes.
+- All player-facing strings (card and power names, log sentences, errors, option labels) come from packages/games/cambio/src/theme.ts.
+- The engine follows the same purity rules as Diwan: pure reducer, injected Rng, no I/O, no Date or Math.random, views as the only way state reaches clients. Card ids are opaque and must never reveal a face.
+
 ## License
 
 Diwan adapts Secret Hitler (Max Temkin, Mike Boxleiter, Tommy Maranges, Mackenzie Schubert), licensed CC BY-NC-SA 4.0. Diwan must stay free, show attribution on the About screen, and ship under the same license (packages/games/diwan/LICENSE). Use only original art.

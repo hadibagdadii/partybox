@@ -25,7 +25,7 @@ export interface PlayerAction<Action> {
  * Contract every game implements so it plugs into the shared room system.
  * Engines are pure: no I/O, no clock, randomness only through `rng`.
  */
-export interface GameModule<State, Action, Event, HostView, PlayerView> {
+export interface GameModule<State, Action, Event, HostView, PlayerView, Options = unknown> {
   id: string;
   /** Neutral fallback name; games with a theme show their themed title in their own screens. */
   displayName: string;
@@ -35,7 +35,12 @@ export interface GameModule<State, Action, Event, HostView, PlayerView> {
   tutorialSlides?: number;
   /** Validates untrusted action payloads before they reach `reduce`. */
   actionSchema: z.ZodType<Action, z.ZodTypeDef, unknown>;
-  createInitialState(players: readonly SeatInfo[], rng: Rng): State;
+  /** Host options the room collected; validates untrusted options before they reach the game. */
+  optionsSchema?: z.ZodType<Options, z.ZodTypeDef, unknown>;
+  /** Options a room uses when the host changes nothing. */
+  defaultOptions?: Options;
+  /** `options` is omitted for games without host options, or to use `defaultOptions`. */
+  createInitialState(players: readonly SeatInfo[], rng: Rng, options?: Options): State;
   /** Rejects wrong-phase or wrong-player actions with a typed error, never by throwing. */
   reduce(state: State, action: PlayerAction<Action>, rng: Rng): ReduceResult<State, Event>;
   /** Public information only: never roles, deck order, or hands. */
