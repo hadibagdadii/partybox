@@ -10,8 +10,12 @@ export interface CambioHostView {
   phase: Phase;
   round: number;
   options: CambioOptions;
-  /** Seat order. Slots carry card ids only, never faces. */
-  players: { id: string; name: string; slots: { slotId: string; cardId: string }[] }[];
+  /** Seat order. Slots carry card ids and grid positions only, never faces. */
+  players: {
+    id: string;
+    name: string;
+    slots: { slotId: string; cardId: string; pos: number }[];
+  }[];
   deckCount: number;
   discardCount: number;
   topDiscard: PublicCard | null;
@@ -64,7 +68,7 @@ export function getHostView(s: CambioState): CambioHostView {
     players: s.players.map((p) => ({
       id: p.id,
       name: p.name,
-      slots: p.hand.map((slot) => ({ slotId: slot.id, cardId: slot.card.id })),
+      slots: p.hand.map((slot) => ({ slotId: slot.id, cardId: slot.card.id, pos: slot.pos })),
     })),
     deckCount: s.deck.length,
     discardCount: s.discard.length,

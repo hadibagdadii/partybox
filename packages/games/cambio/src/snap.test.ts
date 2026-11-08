@@ -67,7 +67,7 @@ describe("snapping another player's card", () => {
     const give = slot(s0, 1, 3);
     const { s, events } = actE(s0, pid(1), snapAt(s0, 2, 0, give.id));
     expect(top(s)).toEqual(card('5', 'clubs'));
-    expect(slot(s, 2, 0)).toEqual({ id: target.id, card: give.card });
+    expect(slot(s, 2, 0)).toEqual({ id: target.id, card: give.card, pos: target.pos });
     expect(s.players[2]!.hand).toHaveLength(4);
     expect(s.players[1]!.hand.map((x) => x.id)).toEqual(
       s0.players[1]!.hand.slice(0, 3).map((x) => x.id),
@@ -121,7 +121,7 @@ describe('wrong snaps', () => {
         ownerId: pid(2),
         slotId: target.id,
         card: { cardId: target.card.id, face: card('10') },
-        penalty: { slotId: penalty.id, cardId: penaltyId },
+        penalty: { slotId: penalty.id, cardId: penaltyId, pos: 4 },
       },
     ]);
     // The penalty card's face is never shown.
@@ -252,5 +252,40 @@ describe('lockCaller and snaps', () => {
     const s = act(s0, pid(1), snapAt(s0, 2, 0, give.id));
     expect(slot(s, 2, 0).card).toEqual(give.card);
     expect(getHostView(s).lockedPlayerId).toBeNull();
+  });
+});
+
+describe('grid positions (RULES.md note 13)', () => {
+  const positions = (s: ReturnType<typeof game>, seat: number) =>
+    s.players[seat]!.hand.map((x) => x.pos);
+
+  it('deals positions 0 to 3', () => {
+    expect(positions(game(), 0)).toEqual([0, 1, 2, 3]);
+  });
+
+  it('leaves a hole when you snap your own card; the rest keep their positions', () => {
+    const s0 = game();
+    const s = act(s0, pid(1), snapAt(s0, 1, 0));
+    expect(positions(s, 1)).toEqual([1, 2, 3]);
+  });
+
+  it("leaves a hole in the giver's hand; the given card keeps the snapped slot's position", () => {
+    const s0 = game();
+    const s = act(s0, pid(1), snapAt(s0, 2, 0, slot(s0, 1, 2).id));
+    expect(positions(s, 1)).toEqual([0, 1, 3]);
+    expect(positions(s, 2)).toEqual([0, 1, 2, 3]);
+  });
+
+  it('puts a penalty card into the lowest hole before growing the grid', () => {
+    // Player 1 snaps their own 5 away (hole at 0), then snaps wrong twice.
+    const s0 = game({ deck: [card('2'), card('3'), card('4')] });
+    const s1 = act(s0, pid(1), snapAt(s0, 1, 0));
+    expect(positions(s1, 1)).toEqual([1, 2, 3]);
+    const s2 = act(s1, pid(1), snapAt(s1, 1, 0));
+    expect(positions(s2, 1)).toEqual([0, 1, 2, 3]);
+    const s3 = act(s2, pid(1), snapAt(s2, 1, 1));
+    expect(positions(s3, 1)).toEqual([0, 1, 2, 3, 4]);
+    // The view carries the same positions.
+    expect(getHostView(s3).players[1]!.slots.map((x) => x.pos)).toEqual([0, 1, 2, 3, 4]);
   });
 });

@@ -43,7 +43,7 @@ export function DevDiwan() {
       room={{ ...room, phase: view.phase === 'over' ? 'over' : 'playing' }}
       you={{ id: 'p1', name: 'Amina', isVip: true }}
       game={view}
-      act={async () => undefined}
+      act={async () => ({ ok: true as const })}
       seatKey={`partybox:dev-diwan:${id}`}
       reset={view.phase === 'over' ? () => undefined : null}
       playAgain={view.phase === 'over' ? () => undefined : null}

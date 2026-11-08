@@ -1,10 +1,17 @@
 import type { CambioHostView, CambioPlayerView, Face, PublicCard } from '@partybox/cambio';
 
+export interface SceneSlot {
+  slotId: string;
+  cardId: string;
+  /** Grid position in the hand; see the engine's RULES.md note 13. */
+  pos: number;
+}
+
 /** Where every card on the table is, as the screen should draw it. Public information only. */
 export interface Scene {
   round: number;
-  /** Seat order, each hand in slot order. */
-  seats: { playerId: string; slots: { slotId: string; cardId: string }[] }[];
+  /** Seat order, each hand sorted by grid position. Positions keep gaps where cards left. */
+  seats: { playerId: string; slots: SceneSlot[] }[];
   /** The card the current player holds after drawing, face down to everyone else. */
   drawn: { playerId: string; cardId: string } | null;
   /** The top few cards of the discard pile, top card last. Buried cards are not tracked. */
@@ -34,7 +41,7 @@ export function sceneFromView(view: CambioHostView): Scene {
     round: view.round,
     seats: view.players.map((p) => ({
       playerId: p.id,
-      slots: p.slots.map((s) => ({ slotId: s.slotId, cardId: s.cardId })),
+      slots: p.slots.map((s) => ({ slotId: s.slotId, cardId: s.cardId, pos: s.pos })),
     })),
     drawn: turn?.drawnCardId ? { playerId: turn.playerId, cardId: turn.drawnCardId } : null,
     discard: view.topDiscard

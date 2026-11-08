@@ -2,7 +2,7 @@ import { PLAYER_NAME_MAX, type PlayerViewMessage } from '@partybox/shared';
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { LatticeBackground, Rosette12 } from '../games/diwan/ornaments';
-import { gameScreens } from '../games/registry';
+import { gameScreens, type ActOptions, type ActResult } from '../games/registry';
 import { getSocket, useConnected, useOnConnect } from '../lib/socket';
 import { cleanCode, isFullCode } from '../lib/room-code';
 import { lastName, parseSlot, playerToken, playerTokenKey } from '../lib/storage';
@@ -121,12 +121,13 @@ export function Play() {
     });
   };
 
-  const act = (action: unknown) =>
-    new Promise<void>((resolve) => {
+  const act = (action: unknown, opts: ActOptions = {}) =>
+    new Promise<ActResult>((resolve) => {
       setError(null);
       socket.emit('game:action', { action }, (result) => {
-        if (!result.ok) setError(result.error.message);
-        resolve();
+        // A quiet action's screen shows its own message for a failure.
+        if (!result.ok && !opts.quiet) setError(result.error.message);
+        resolve(result.ok ? { ok: true } : { ok: false, error: result.error });
       });
     });
 
@@ -262,7 +263,7 @@ function Seated({
   debug,
 }: {
   view: PlayerViewMessage;
-  act: (action: unknown) => Promise<void>;
+  act: (action: unknown, opts?: ActOptions) => Promise<ActResult>;
   send: (event: SeatCommand) => void;
   step: (dir: 'next' | 'back') => void;
   seatKey: string;
@@ -359,7 +360,7 @@ function Banner({ children }: { children: ReactNode }) {
   return (
     <p
       role="status"
-      className="fixed inset-x-0 top-0 z-[60] bg-court-danger px-4 pb-1.5 pt-[max(env(safe-area-inset-top),0.375rem)] text-center text-sm font-semibold text-white shadow-lift"
+      className="fixed inset-x-0 top-0 z-[200] bg-court-danger px-4 pb-1.5 pt-[max(env(safe-area-inset-top),0.375rem)] text-center text-sm font-semibold text-white shadow-lift"
     >
       {children}
     </p>
@@ -370,7 +371,7 @@ function Toast({ children }: { children: ReactNode }) {
   return (
     <p
       role="alert"
-      className="pointer-events-none fixed inset-x-4 top-[calc(max(env(safe-area-inset-top),0.75rem)+4rem)] z-[60] mx-auto max-w-md rounded-button bg-court-danger px-4 py-3 text-center text-lg text-white shadow-lift"
+      className="pointer-events-none fixed inset-x-4 top-[calc(max(env(safe-area-inset-top),0.75rem)+4rem)] z-[200] mx-auto max-w-md rounded-button bg-court-danger px-4 py-3 text-center text-lg text-white shadow-lift"
     >
       {children}
     </p>

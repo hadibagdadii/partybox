@@ -141,6 +141,11 @@ function playRandomGame(seed: number): Outcome {
       if (e.type === 'kingPeek' || e.type === 'kingSwap') outcome.powers.add(e.type);
     }
     check(cardCount(s) === total, seed, `card count ${cardCount(s)} != ${total}`);
+    for (const p of s.players) {
+      const pos = p.hand.map((x) => x.pos);
+      const sorted = pos.every((v, i) => i === 0 || v > pos[i - 1]!);
+      check(sorted, seed, `${p.id} positions not unique and sorted: ${pos.join()}`);
+    }
   }
   outcome.s = s;
   return outcome;

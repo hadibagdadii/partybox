@@ -2,6 +2,7 @@ import type { LobbyView, PlayerViewMessage } from '@partybox/shared';
 import type { ComponentType } from 'react';
 import { CambioDebugHost } from './cambio/CambioDebugHost';
 import { CambioDebugPlayer } from './cambio/CambioDebugPlayer';
+import { CambioPhone } from './cambio/phone/CambioPhone';
 import { cambioOptionFields } from './cambio/options';
 import { DiwanDebugPlayer } from './diwan/DiwanDebugPlayer';
 import { DiwanDebugHost } from './diwan/DiwanDebugHost';
@@ -24,13 +25,21 @@ export interface HostScreenProps {
   endGame?: () => void;
 }
 
+/** The server's answer to an action. */
+export type ActResult = { ok: true } | { ok: false; error: { code: string; message: string } };
+
+export interface ActOptions {
+  /** The screen shows its own message if this fails, so the generic error toast stays hidden. */
+  quiet?: boolean;
+}
+
 export interface PlayerScreenProps {
   room: LobbyView;
   you: PlayerViewMessage['you'];
   /** The game's projection for this player. */
   game: unknown;
-  /** Sends an action; resolves once the server has answered. */
-  act: (action: unknown) => Promise<void>;
+  /** Sends an action; resolves with the server's answer. */
+  act: (action: unknown, opts?: ActOptions) => Promise<ActResult>;
   /** Namespace for anything this seat keeps in local storage. */
   seatKey: string;
   /** Returns the room to the lobby; set only for the VIP once the game is over. */
@@ -91,11 +100,12 @@ export const gameScreens: Record<string, GameScreens> = {
     HostTutorial: TutorialTv,
     Tutorial: TutorialPhone,
   },
-  // Plain debug screens until the real ones ship; ?debug=1 keeps reaching them after that.
+  // The TV stays on its debug screen until it ships; ?debug=1 keeps reaching both in dev.
   cambio: {
     Host: CambioDebugHost,
     HostDebug: CambioDebugHost,
-    Player: CambioDebugPlayer,
+    Player: CambioPhone,
+    fullScreen: true,
     Debug: CambioDebugPlayer,
     options: cambioOptionFields,
   },

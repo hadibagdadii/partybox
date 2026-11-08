@@ -35,7 +35,8 @@ export type FixtureId =
   | 'reshuffle'
   | 'call'
   | 'reveal'
-  | 'burst';
+  | 'burst'
+  | 'holes';
 
 export const FIXTURE_IDS: readonly FixtureId[] = [
   'deal',
@@ -53,6 +54,7 @@ export const FIXTURE_IDS: readonly FixtureId[] = [
   'call',
   'reveal',
   'burst',
+  'holes',
 ];
 
 /** One broadcast: the events one action emitted and the views right after it. */
@@ -262,6 +264,29 @@ const scripts: Record<FixtureId, (count: number) => Script> = {
     },
     actions: (s) => [[s.turn!.playerId, { type: 'discard' }]],
   }),
+  holes: () => {
+    // Seat 1 snaps its 5 away (a hole at the top left), then wrong snaps fill the hole first and
+    // only then grow the grid. Seat 0 (the phone) and seat 3 (a side seat) grow to 7 and 8 cards.
+    const plan: ((s: CambioState) => [string, CambioAction])[] = [
+      (s) => [pid(1), { type: 'snap', slotId: own(s, 1, 0), cardId: slot(s, 1, 0).card.id }],
+      wrongOwn(1),
+      wrongOwn(1),
+      wrongOwn(0),
+      wrongOwn(0),
+      wrongOwn(0),
+      wrongOwn(3),
+      wrongOwn(3),
+      wrongOwn(3),
+      wrongOwn(3),
+    ];
+    return {
+      deck: fillers(30, '3'),
+      actions: () => {
+        let i = 0;
+        return (s) => plan[i++]?.(s) ?? null;
+      },
+    };
+  },
   burst: () => {
     // Quick turns with racing snaps: about 30 events in 22 broadcasts.
     let n = 0;
@@ -282,6 +307,14 @@ const scripts: Record<FixtureId, (count: number) => Script> = {
     };
   },
 };
+
+/** Snaps `seat`'s first card, which is wrong on a 5: a penalty card into the first free spot. */
+const wrongOwn =
+  (seat: number) =>
+  (s: CambioState): [string, CambioAction] => [
+    pid(seat),
+    { type: 'snap', slotId: own(s, seat, 0), cardId: slot(s, seat, 0).card.id },
+  ];
 
 /** A fixture on a `playerCount` table (6 and 12 are the gallery's tables). */
 export function buildFixture(id: FixtureId, playerCount: number): Fixture {

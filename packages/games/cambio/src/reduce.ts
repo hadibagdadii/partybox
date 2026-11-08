@@ -16,7 +16,7 @@ import {
   type Located,
 } from './rules.js';
 import { matchWinners, roundWinners, scoreHand } from './scoring.js';
-import { assignCardIds, dealRound, newSlot, shuffle } from './setup.js';
+import { assignCardIds, dealRound, freePos, newSlot, placeSlot, shuffle } from './setup.js';
 import type { Card, CambioEvent, CambioState, RoundResult, SlotRef, Turn } from './state.js';
 import { theme } from './theme.js';
 
@@ -340,15 +340,16 @@ function snap(
   // Wrong: everyone sees the card, it goes back, and the snapper takes a penalty card.
   if (own) remember(s, snapperId, card.id);
   const penaltyCard = takeCard(ctx);
-  const penalty = penaltyCard ? newSlot(s, penaltyCard) : null;
-  if (penalty) snapper.hand.push(penalty);
+  // The penalty fills the snapper's first empty grid position before the grid grows.
+  const penalty = penaltyCard ? newSlot(s, penaltyCard, freePos(snapper.hand)) : null;
+  if (penalty) placeSlot(snapper.hand, penalty);
   emit(ctx, {
     type: 'snapFailed',
     snapperId,
     ownerId: owner.id,
     slotId: at.slot.id,
     card: publicCard(card),
-    penalty: penalty ? { slotId: penalty.id, cardId: penalty.card.id } : null,
+    penalty: penalty ? { slotId: penalty.id, cardId: penalty.card.id, pos: penalty.pos } : null,
   });
   return null;
 }

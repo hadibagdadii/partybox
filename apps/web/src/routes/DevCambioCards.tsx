@@ -27,6 +27,7 @@ const PRIMITIVES: { id: FixtureId | 'flip'; label: string }[] = [
   { id: 'call', label: 'Call Cambio' },
   { id: 'reveal', label: 'Round reveal' },
   { id: 'burst', label: 'Burst' },
+  { id: 'holes', label: 'Holes and penalties' },
 ];
 
 /** Time between a fixture's broadcasts: bursts arrive like fast bots, peeks hold to be seen. */

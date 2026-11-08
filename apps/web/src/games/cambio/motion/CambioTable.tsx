@@ -1,6 +1,6 @@
 import type { CambioHostView } from '@partybox/cambio';
 import { motion } from 'motion/react';
-import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { colors, ease, fonts } from '../tokens';
 import { CardLayer, type Perspective } from './CardLayer';
 import { Felt } from './Felt';
@@ -9,7 +9,7 @@ import { DeckStack, DiscardBase, ImpactRing, SweepGhosts } from './Piles';
 import type { MotionFrame } from './useCambioMotion';
 
 /** Measures the element on mount and on resize only; animation frames never read layout. */
-function useSize() {
+export function useSize() {
   const ref = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
   useLayoutEffect(() => {
@@ -85,20 +85,30 @@ export function CambioTable({
   frame,
   perspective,
   phoneOf,
+  layout: given,
+  plates = true,
+  over,
   className,
 }: {
   view: CambioHostView;
   frame: MotionFrame;
   perspective?: Perspective;
   phoneOf?: string;
+  /** A layout measured by the caller (the phone, whose overlays line up with it). */
+  layout?: TableLayout | null;
+  /** Name plates at each seat; the phone draws its own strip instead. */
+  plates?: boolean;
+  /** Drawn above the cards, inside the table. */
+  over?: ReactNode;
   className?: string;
 }) {
   const { ref, size } = useSize();
   const ids = useMemo(() => view.players.map((p) => p.id), [view.players]);
   const layout = useMemo(() => {
+    if (given !== undefined) return given;
     if (!size || size.w === 0) return null;
     return phoneOf ? phoneLayout(size.w, size.h, ids, phoneOf) : tableLayout(size.w, size.h, ids);
-  }, [size, ids, phoneOf]);
+  }, [given, size, ids, phoneOf]);
   const { scene, playing, timeScale } = frame;
 
   return (
@@ -118,10 +128,15 @@ export function CambioTable({
                 <DeckStack layout={layout} count={scene.deckCount} />
                 <DiscardBase layout={layout} count={scene.discardCount} playing={playing} />
                 <ImpactRing layout={layout} playing={playing} timeScale={timeScale} />
-                <SeatPlates layout={layout} view={view} frame={frame} />
+                {plates && <SeatPlates layout={layout} view={view} frame={frame} />}
               </>
             }
-            over={<SweepGhosts layout={layout} playing={playing} timeScale={timeScale} />}
+            over={
+              <>
+                <SweepGhosts layout={layout} playing={playing} timeScale={timeScale} />
+                {over}
+              </>
+            }
           />
         )}
       </div>

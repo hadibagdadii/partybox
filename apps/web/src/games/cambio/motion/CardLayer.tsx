@@ -14,6 +14,11 @@ export interface Perspective {
   youId: string | null;
   /** Faces only this viewer may see now: their drawn card and their peek. */
   privateFaces: Record<string, Face>;
+  /**
+   * Cards in this viewer's own hand shown face up right now, by card id: the initial peek while
+   * held. The phone decides when; a card missing here shows its back.
+   */
+  handFaces?: Record<string, Face>;
 }
 
 const HOST: Perspective = { youId: null, privateFaces: {} };
@@ -173,7 +178,7 @@ export function CardLayer({
     const out: Item[] = [];
     const flips = new Map(step?.flips.map((f) => [f.cardId, f]));
     const movesById = new Map(step?.moves.map((m) => [m.cardId, m]));
-    const { youId, privateFaces } = perspective;
+    const { youId, privateFaces, handFaces = {} } = perspective;
     const discardIds = new Set(scene.discard.map((c) => c.cardId));
     scene.discard.forEach((c, i) => {
       const pose = poses.get(c.cardId)!;
@@ -193,8 +198,10 @@ export function CardLayer({
       for (const slot of seat.slots) {
         const pose = poses.get(slot.cardId)!;
         const peeking = peekSlot === slot.slotId;
+        const own = seat.playerId === youId && youId !== null;
         const mine =
-          peeking && scene.peek?.playerId === youId ? privateFaces[slot.cardId] : undefined;
+          (peeking && scene.peek?.playerId === youId ? privateFaces[slot.cardId] : undefined) ??
+          (own ? handFaces[slot.cardId] : undefined);
         const revealed = scene.revealed[slot.cardId];
         const f = flips.get(slot.cardId);
         const face = mine ?? revealed ?? f?.face ?? null;
@@ -212,7 +219,7 @@ export function CardLayer({
                 delay: (f.delay * k) / 1000,
               }
             : null,
-          lifted: peeking,
+          lifted: peeking || !!(own && handFaces[slot.cardId]),
           z: peeking ? 60 : 20,
         });
       }

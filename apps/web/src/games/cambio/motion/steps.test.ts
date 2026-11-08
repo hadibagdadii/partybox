@@ -2,6 +2,8 @@ import { cambioModule, type CambioState } from '@partybox/cambio';
 import { FIXTURE_IDS, buildFixture } from '@partybox/cambio/fixtures';
 import { createRng } from '@partybox/shared';
 import { describe, expect, it } from 'vitest';
+import { CARD_RATIO } from '../tokens';
+import { handCols, phoneLayout, posesFor, tableLayout } from './layout';
 import { sceneFromView, sceneKey } from './scene';
 import { applyEvent, dealStagger, stepsFor } from './steps';
 
@@ -139,5 +141,117 @@ describe('steps', () => {
     expect(delays).toHaveLength(6);
     expect(delays).toEqual([...delays].sort((a, b) => a - b));
     expect(step.long).toBe(true);
+  });
+});
+
+describe('stable grid positions', () => {
+  const seat = (scene: ReturnType<typeof sceneFromView>, playerId: string) =>
+    scene.seats.find((x) => x.playerId === playerId)!;
+
+  it('a snap leaves a hole and every other card keeps its pose', () => {
+    const f = buildFixture('holes', 6);
+    const layout = tableLayout(
+      1920,
+      1080,
+      f.before.host.players.map((p) => p.id),
+    );
+    const before = sceneFromView(f.before.host);
+    const { scene } = applyEvent(before, f.steps[0]!.events[0]!);
+    const owner = f.before.host.players[1]!.id;
+    expect(seat(scene, owner).slots.map((x) => x.pos)).toEqual([1, 2, 3]);
+    const a = posesFor(before, layout);
+    const b = posesFor(scene, layout);
+    for (const x of seat(scene, owner).slots) expect(b.get(x.cardId)).toEqual(a.get(x.cardId));
+  });
+
+  it('a penalty fills the hole before the grid grows, then extends it', () => {
+    const f = buildFixture('holes', 6);
+    let scene = sceneFromView(f.before.host);
+    const owner = f.before.host.players[1]!.id;
+    const positions: number[][] = [];
+    for (const step of f.steps.slice(0, 3)) {
+      scene = stepsFor(scene, step.events).scene;
+      positions.push(seat(scene, owner).slots.map((x) => x.pos));
+    }
+    expect(positions).toEqual([
+      [1, 2, 3],
+      [0, 1, 2, 3],
+      [0, 1, 2, 3, 4],
+    ]);
+  });
+
+  it('the grid narrows only once its last column is empty', () => {
+    expect(handCols([0, 1, 2, 3])).toBe(2);
+    expect(handCols([1, 2, 3])).toBe(2);
+    expect(handCols([0, 1, 2, 3, 4])).toBe(3);
+    // A hole inside the grid keeps its column; the last column empty narrows it.
+    expect(handCols([0, 2, 3, 5])).toBe(3);
+    expect(handCols([0, 1, 2, 3, 6])).toBe(4);
+    expect(handCols([])).toBe(2);
+  });
+
+  it('the phone keeps your hand fully inside its box at every width the grid reaches', () => {
+    const ids = ['you', 'a', 'b', 'c', 'd', 'e'];
+    const l = phoneLayout(375, 740, ids, 'you');
+    for (let cols = 2; cols <= 6; cols++) {
+      for (let pos = 0; pos < cols * 2; pos++) {
+        const p = l.slot('you', pos, cols);
+        const w = p.scale * l.spriteWidth;
+        const h = w * CARD_RATIO;
+        expect(p.x - w / 2).toBeGreaterThanOrEqual(0);
+        expect(p.x + w / 2).toBeLessThanOrEqual(375);
+        expect(p.y - h / 2).toBeGreaterThanOrEqual(l.regions.hand.top - 1);
+        expect(p.y + h / 2).toBeLessThanOrEqual(l.regions.hand.bottom + 1);
+      }
+    }
+  });
+});
+
+describe('the TV table keeps every hand on screen and apart', () => {
+  type Box = { l: number; r: number; t: number; b: number };
+  const boxOf = (layout: ReturnType<typeof tableLayout>, id: string, positions: number[]): Box => {
+    const cols = handCols(positions);
+    const boxes = positions.map((pos) => {
+      const p = layout.slot(id, pos, cols);
+      const w = p.scale * layout.spriteWidth;
+      const h = w * CARD_RATIO;
+      return { l: p.x - w / 2, r: p.x + w / 2, t: p.y - h / 2, b: p.y + h / 2 };
+    });
+    return {
+      l: Math.min(...boxes.map((x) => x.l)),
+      r: Math.max(...boxes.map((x) => x.r)),
+      t: Math.min(...boxes.map((x) => x.t)),
+      b: Math.max(...boxes.map((x) => x.b)),
+    };
+  };
+  const overlap = (a: Box, b: Box) => a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b;
+
+  describe.each([
+    [1920, 1080],
+    [1280, 720],
+  ])('%ix%i', (w, h) => {
+    it.each([2, 4, 6, 8, 9, 10, 12])('%i seats, with 4 or 8 cards each', (n) => {
+      const ids = Array.from({ length: n }, (_, i) => `p${i}`);
+      const layout = tableLayout(w, h, ids);
+      for (const size of [4, 8]) {
+        const positions = Array.from({ length: size }, (_, i) => i);
+        const boxes = ids.map((id) => boxOf(layout, id, positions));
+        for (const [i, b] of boxes.entries()) {
+          expect(b.l, `seat ${i}`).toBeGreaterThanOrEqual(0);
+          expect(b.r, `seat ${i}`).toBeLessThanOrEqual(w);
+          expect(b.t, `seat ${i}`).toBeGreaterThanOrEqual(0);
+          expect(b.b, `seat ${i}`).toBeLessThanOrEqual(h);
+          for (let j = i + 1; j < boxes.length; j++) {
+            expect(overlap(b, boxes[j]!), `seats ${i} and ${j}, ${size} cards`).toBe(false);
+          }
+        }
+        for (const seat of layout.seats) {
+          expect(seat.labelX).toBeGreaterThan(0);
+          expect(seat.labelX).toBeLessThan(w);
+          expect(seat.labelY).toBeGreaterThan(0);
+          expect(seat.labelY).toBeLessThan(h);
+        }
+      }
+    });
   });
 });

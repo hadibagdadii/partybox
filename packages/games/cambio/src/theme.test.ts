@@ -71,4 +71,17 @@ describe('theme', () => {
   it('has copy for every option', () => {
     for (const o of Object.values(theme.options)) expect(o.label && o.hint).toBeTruthy();
   });
+
+  it('has phone copy, with counts and names filled in', () => {
+    for (const [key, v] of Object.entries(theme.phone)) {
+      const text = typeof v === 'function' ? (v as (...a: unknown[]) => string)('Amina', 2) : v;
+      expect(text, key).toBeTruthy();
+    }
+    expect(theme.phone.cardCount(1)).toBe('1 card');
+    expect(theme.phone.cardCount(6)).toBe('6 cards');
+    expect(theme.phone.turnsLeft(1)).toBe('1 turn left');
+    expect(theme.phone.turnsLeft(3)).toBe('3 turns left');
+    expect(theme.phone.called('Yusuf')).toBe('Yusuf called Cambio');
+    expect(theme.phone.tooLate).toBe('Too late');
+  });
 });

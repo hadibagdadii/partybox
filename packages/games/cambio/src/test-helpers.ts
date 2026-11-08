@@ -47,7 +47,7 @@ export function makeGame(opts: Setup = {}): CambioState {
   opts.hands?.forEach((faces, i) => {
     if (!faces) return;
     const p = s.players[i]!;
-    p.hand = assignCardIds(s, faces, rng).map((c) => newSlot(s, c));
+    p.hand = assignCardIds(s, faces, rng).map((c, i) => newSlot(s, c, i));
     s.peekSlotIds[p.id] = p.hand.slice(2, 4).map((slot) => slot.id);
   });
   s.deck = assignCardIds(s, opts.deck ?? fillers(20), rng);

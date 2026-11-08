@@ -29,7 +29,7 @@ describe('host view', () => {
     expect(host.players[0]).toEqual({
       id: pid(0),
       name: 'Player 0',
-      slots: s.players[0]!.hand.map((x) => ({ slotId: x.id, cardId: x.card.id })),
+      slots: s.players[0]!.hand.map((x) => ({ slotId: x.id, cardId: x.card.id, pos: x.pos })),
     });
     expect(host.topDiscard).toEqual({ cardId: s.discard[0]!.id, face: card('6', 'hearts') });
     expect(host).toMatchObject({ deckCount: 20, discardCount: 1, phase: 'play', round: 1 });

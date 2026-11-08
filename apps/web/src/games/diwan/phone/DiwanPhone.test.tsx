@@ -3,6 +3,7 @@ import type { LobbyView } from '@partybox/shared';
 import { act as flush, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { ActResult } from '../../registry';
 import { DiwanPhone } from './DiwanPhone';
 import { DiwanLobby } from './screens/DiwanLobby';
 import { scenarios, type ScenarioId } from './fixtures';
@@ -21,7 +22,7 @@ const room: LobbyView = {
 
 let seat = 0;
 function renderPhone(view: DiwanPlayerView) {
-  const act = vi.fn<(action: unknown) => Promise<void>>(async () => undefined);
+  const act = vi.fn<(action: unknown) => Promise<ActResult>>(async () => ({ ok: true }));
   const seatKey = `test:${++seat}`;
   const ui = (v: DiwanPlayerView) => (
     <DiwanPhone
@@ -240,7 +241,7 @@ describe('game over', () => {
         room={{ ...room, phase: 'over' }}
         you={{ id: 'p1', name: 'Amina', isVip: vip }}
         game={scenarios.gameOver}
-        act={async () => undefined}
+        act={async () => ({ ok: true })}
         seatKey="test:over"
         reset={vip ? reset : null}
         playAgain={vip ? playAgain : null}

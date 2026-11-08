@@ -33,10 +33,25 @@ export function assignCardIds(s: CambioState, faces: Face[], rng: Rng): Card[] {
   return faces.map((face, i) => ({ id: `c${(serials[i] as number).toString(36)}`, face }));
 }
 
-export function newSlot(s: CambioState, card: Card): Slot {
-  const slot = { id: `s${s.nextSlotSerial.toString(36)}`, card };
+export function newSlot(s: CambioState, card: Card, pos: number): Slot {
+  const slot = { id: `s${s.nextSlotSerial.toString(36)}`, card, pos };
   s.nextSlotSerial += 1;
   return slot;
+}
+
+/** The lowest grid position no card in `hand` holds: a gap first, the end of the grid otherwise. */
+export function freePos(hand: readonly Slot[]): number {
+  const used = new Set(hand.map((slot) => slot.pos));
+  let pos = 0;
+  while (used.has(pos)) pos += 1;
+  return pos;
+}
+
+/** Puts `slot` into `hand`, keeping the hand sorted by position. */
+export function placeSlot(hand: Slot[], slot: Slot): void {
+  const at = hand.findIndex((x) => x.pos > slot.pos);
+  if (at === -1) hand.push(slot);
+  else hand.splice(at, 0, slot);
 }
 
 /** Shuffles a fresh deck, deals 4 to each player, flips the first discard and opens the peek. */
@@ -45,7 +60,7 @@ export function dealRound(s: CambioState, rng: Rng, emit: (e: CambioEvent) => vo
   const deck = assignCardIds(s, faces, rng);
   for (const p of s.players) p.hand = [];
   for (let i = 0; i < HAND_SIZE; i++) {
-    for (const p of s.players) p.hand.push(newSlot(s, deck.shift() as Card));
+    for (const p of s.players) p.hand.push(newSlot(s, deck.shift() as Card, i));
   }
   const first = deck.shift() as Card;
   const firstPlayer = s.players[rng.int(s.players.length)] as (typeof s.players)[number];
@@ -68,7 +83,7 @@ export function dealRound(s: CambioState, rng: Rng, emit: (e: CambioEvent) => vo
     firstPlayerId: firstPlayer.id,
     hands: s.players.map((p) => ({
       playerId: p.id,
-      slots: p.hand.map((slot) => ({ slotId: slot.id, cardId: slot.card.id })),
+      slots: p.hand.map((slot) => ({ slotId: slot.id, cardId: slot.card.id, pos: slot.pos })),
     })),
     discard: { cardId: first.id, face: { ...first.face } },
     deckCount: s.deck.length,

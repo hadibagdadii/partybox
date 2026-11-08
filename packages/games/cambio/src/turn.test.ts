@@ -59,7 +59,7 @@ describe('swap', () => {
     const drawn = s0.turn!.drawn!;
     const target = slot(s0, 0, 1);
     const { s, events } = actE(s0, pid(0), { type: 'swap', slotId: target.id });
-    expect(slot(s, 0, 1)).toEqual({ id: target.id, card: drawn });
+    expect(slot(s, 0, 1)).toEqual({ id: target.id, card: drawn, pos: target.pos });
     expect(top(s)).toEqual(card('2'));
     expect(events[0]).toEqual({
       type: 'swapped',

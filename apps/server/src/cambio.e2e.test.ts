@@ -167,7 +167,8 @@ function autoplay(phone: Client, { continueRounds = false } = {}) {
     const v = m.game as CambioPlayerView | null;
     if (state.paused || !v || m.room.phase !== 'playing') return;
     const action = pick(v);
-    if (action) void phone.emitWithAck('game:action', { action });
+    // Fire and forget; a reply still pending at teardown is dropped, not an error.
+    if (action) phone.emitWithAck('game:action', { action }).catch(() => undefined);
   });
   return state;
 }
@@ -209,7 +210,8 @@ describe('Cambio rooms over real sockets', () => {
           [b, bLog.player.at(-1)?.game as CambioPlayerView],
         ] as const) {
           const action = pick0(pv);
-          if (action) void phone.emitWithAck('game:action', { action });
+          // Fire and forget; a reply still pending at teardown is dropped, not an error.
+          if (action) phone.emitWithAck('game:action', { action }).catch(() => undefined);
         }
         await new Promise((r) => setTimeout(r, 40));
       }
@@ -262,12 +264,13 @@ describe('Cambio rooms over real sockets', () => {
     const results = await Promise.all(burst);
     const accepted = results.filter((r) => r.ok).length;
     expect(accepted).toBeGreaterThan(0);
-    const settled = tvLog.host.length;
-    await new Promise((r) => setTimeout(r, 50));
-    const views = tvLog.host.slice(0, settled).flatMap((m) => cambioView(m) ?? []);
-    // One broadcast per accepted action, each from the state as it was then.
+    // One broadcast per accepted action, each from the state as it was then. Acks can reach
+    // the phones before the TV's last broadcasts do, so wait for those to land.
     const snapEvents = (v: CambioHostView) =>
       v.log.filter((e) => e.type === 'snapped' || e.type === 'snapFailed').length;
+    await until(() => snapEvents(cambioView(tvLog.host.at(-1))!) - snapEvents(after) >= accepted);
+    await new Promise((r) => setTimeout(r, 50));
+    const views = tvLog.host.flatMap((m) => cambioView(m) ?? []);
     expect(snapEvents(views.at(-1)!) - snapEvents(after)).toBe(accepted);
     for (const v of views) {
       checkTable(v, 1);

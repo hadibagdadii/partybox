@@ -121,7 +121,8 @@ export function SweepGhosts({
     <div
       aria-hidden="true"
       key={playing!.id}
-      style={{ position: 'absolute', inset: 0, zIndex: 40, pointerEvents: 'none' }}
+      // Under the discard's top card (z 10+), which stays put, and over both pile bases.
+      style={{ position: 'absolute', inset: 0, zIndex: 5, pointerEvents: 'none' }}
     >
       {Array.from({ length: sweep.count }, (_, i) => (
         <motion.div

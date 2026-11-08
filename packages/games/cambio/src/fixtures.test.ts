@@ -19,6 +19,7 @@ const shows: Record<FixtureId, CambioEventType> = {
   call: 'cambioCalled',
   reveal: 'roundRevealed',
   burst: 'snapped',
+  holes: 'snapFailed',
 };
 
 describe.each([6, 12])('fixtures on a %i-player table', (count) => {

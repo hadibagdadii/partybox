@@ -54,7 +54,7 @@ function play(stop: (s: CambioState) => boolean, options = {}): CambioState {
 }
 
 function phone(view: CambioPlayerView, isVip = false) {
-  const act = vi.fn(() => Promise.resolve());
+  const act = vi.fn(() => Promise.resolve({ ok: true as const }));
   const you = { id: view.you!.id, name: view.you!.id.toUpperCase(), isVip };
   render(
     <CambioDebugPlayer

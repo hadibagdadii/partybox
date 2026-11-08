@@ -12,12 +12,14 @@ export interface Card {
 export interface Slot {
   id: string;
   card: Card;
+  /** Grid position: 0-3 are the dealt 2x2, then columns of two to the right. Never renumbered. */
+  pos: number;
 }
 
 export interface CambioPlayer {
   id: string;
   name: string;
-  /** Ordered; the first four are the dealt 2x2 grid, penalty cards are appended. */
+  /** Sorted by `pos`. A card that leaves leaves its position empty; see RULES.md note 13. */
   hand: Slot[];
 }
 
@@ -74,7 +76,7 @@ export type CambioEvent =
       type: 'dealt';
       round: number;
       firstPlayerId: string;
-      hands: { playerId: string; slots: { slotId: string; cardId: string }[] }[];
+      hands: { playerId: string; slots: { slotId: string; cardId: string; pos: number }[] }[];
       discard: PublicCard;
       deckCount: number;
     }
@@ -118,7 +120,7 @@ export type CambioEvent =
       /** Shown to everyone, then returned face down to `slotId`. */
       card: PublicCard;
       /** Null only if no card was left anywhere to draw. */
-      penalty: { slotId: string; cardId: string } | null;
+      penalty: { slotId: string; cardId: string; pos: number } | null;
     }
   | { type: 'cambioCalled'; playerId: string }
   | { type: 'reshuffled'; deckCount: number }

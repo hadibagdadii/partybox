@@ -83,8 +83,8 @@ describe('Jack: blind swap between two other players', () => {
     const a = slot(s, 1, 0);
     const b = slot(s, 2, 1);
     const { s: after, events } = actE(s, pid(0), { type: 'blindSwap', slotIds: [a.id, b.id] });
-    expect(slot(after, 1, 0)).toEqual({ id: a.id, card: b.card });
-    expect(slot(after, 2, 1)).toEqual({ id: b.id, card: a.card });
+    expect(slot(after, 1, 0)).toEqual({ id: a.id, card: b.card, pos: a.pos });
+    expect(slot(after, 2, 1)).toEqual({ id: b.id, card: a.card, pos: b.pos });
     expect(events[0]).toEqual({
       type: 'blindSwap',
       playerId: pid(0),

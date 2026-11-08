@@ -290,7 +290,12 @@ export function applyEvent(prev: Scene, event: CambioEvent): { scene: Scene; ste
       const moves: CardMove[] = [];
       let duration = show;
       if (event.penalty) {
-        seatOf(s, event.snapperId)?.slots.push({ ...event.penalty });
+        const seat = seatOf(s, event.snapperId);
+        if (seat) {
+          // Into its own grid position: a hole first, the end of the grid otherwise.
+          seat.slots.push({ ...event.penalty });
+          seat.slots.sort((a, b) => a.pos - b.pos);
+        }
         s.deckCount = Math.max(0, s.deckCount - 1);
         const delay = show - 120;
         moves.push({
