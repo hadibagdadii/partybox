@@ -1,5 +1,8 @@
 import type { LobbyView, PlayerViewMessage } from '@partybox/shared';
 import type { ComponentType } from 'react';
+import { CambioDebugHost } from './cambio/CambioDebugHost';
+import { CambioDebugPlayer } from './cambio/CambioDebugPlayer';
+import { cambioOptionFields } from './cambio/options';
 import { DiwanDebugPlayer } from './diwan/DiwanDebugPlayer';
 import { DiwanDebugHost } from './diwan/DiwanDebugHost';
 import { DiwanLobby } from './diwan/phone/screens/DiwanLobby';
@@ -8,6 +11,7 @@ import { DiwanTv } from './diwan/tv/DiwanTv';
 import { HeraldLobbyExtras } from './diwan/tv/HeraldSettings';
 import { TutorialPhone } from './diwan/tutorial/TutorialPhone';
 import { TutorialTv } from './diwan/tutorial/TutorialTv';
+import type { OptionField } from './options';
 import { TapRaceHost, TapRacePlayer } from './tap-race/TapRace';
 
 export interface HostScreenProps {
@@ -70,6 +74,8 @@ export interface GameScreens {
   /** Lobby tutorial on the TV, and the phone screen that drives or watches it. */
   HostTutorial?: ComponentType<HostScreenProps>;
   Tutorial?: ComponentType<TutorialScreenProps>;
+  /** Host options the TV lobby shows, matching the game's optionsSchema. */
+  options?: OptionField[];
 }
 
 export const gameScreens: Record<string, GameScreens> = {
@@ -84,6 +90,14 @@ export const gameScreens: Record<string, GameScreens> = {
     fullScreen: true,
     HostTutorial: TutorialTv,
     Tutorial: TutorialPhone,
+  },
+  // Plain debug screens until the real ones ship; ?debug=1 keeps reaching them after that.
+  cambio: {
+    Host: CambioDebugHost,
+    HostDebug: CambioDebugHost,
+    Player: CambioDebugPlayer,
+    Debug: CambioDebugPlayer,
+    options: cambioOptionFields,
   },
   'tap-race': { Host: TapRaceHost, Player: TapRacePlayer },
 };

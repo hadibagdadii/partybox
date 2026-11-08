@@ -2,6 +2,8 @@ import type { AckResult, GameOption, HostViewMessage, LobbyView } from '@partybo
 import { useCallback, useEffect, useState, type ComponentType, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { JoinQr } from '../components/JoinQr';
+import { OptionsPanel } from '../components/OptionsPanel';
+import type { OptionField } from '../games/options';
 import { gameScreens } from '../games/registry';
 import { useJoinDisplayUrl } from '../lib/config';
 import { joinPath, joinUrl } from '../lib/room-code';
@@ -118,7 +120,12 @@ export function Host() {
         <p className="absolute top-6 rounded-full bg-red-900 px-6 py-2 text-xl">Reconnecting…</p>
       )}
       {!playing || !GameHost ? (
-        <Lobby room={view.room} games={view.games} Extras={screens?.HostLobbyExtras} />
+        <Lobby
+          room={view.room}
+          games={view.games}
+          Extras={screens?.HostLobbyExtras}
+          optionFields={screens?.options}
+        />
       ) : (
         <>
           <p className="absolute right-8 top-6 text-3xl font-bold tracking-widest text-slate-400">
@@ -218,10 +225,12 @@ function Lobby({
   room,
   games,
   Extras,
+  optionFields,
 }: {
   room: LobbyView;
   games: GameOption[];
   Extras?: ComponentType;
+  optionFields?: OptionField[] | undefined;
 }) {
   const socket = getSocket();
   const [botError, setBotError] = useState<string | null>(null);
@@ -252,6 +261,11 @@ function Lobby({
     socket.emit('room:setGame', { gameId }, report);
   };
 
+  const setOptions = (options: Record<string, unknown>) => {
+    setBotError(null);
+    socket.emit('room:setOptions', { options }, report);
+  };
+
   return (
     <>
       <JoinPanel code={room.code} />
@@ -269,6 +283,9 @@ function Lobby({
               }`}
             >
               {g.name}
+              <span className="ml-2 text-lg opacity-70">
+                {g.minPlayers}–{g.maxPlayers} players
+              </span>
             </button>
           ))}
         </div>
@@ -278,6 +295,10 @@ function Lobby({
         {missing > 0 ? ` · need ${missing} more` : ' · waiting for the VIP to start'}
       </p>
       {Extras && <Extras />}
+      {optionFields && room.options && (
+        <OptionsPanel fields={optionFields} values={room.options} onChange={setOptions} />
+      )}
+      {botError && <p className="text-xl text-red-400">{botError}</p>}
       <ul className="flex max-w-6xl flex-wrap justify-center gap-4">
         {room.players.map((p) => (
           <li
@@ -355,7 +376,6 @@ function Lobby({
           >
             Open /dev phones
           </a>
-          {botError && <span className="text-xl text-red-400">{botError}</span>}
         </div>
       )}
     </>

@@ -66,6 +66,7 @@ export function fixtureRoom(view: DiwanHostView, awayIds: string[] = []): LobbyV
       awayLong: false,
     })),
     tutorial: null,
+    options: null,
   };
 }
 

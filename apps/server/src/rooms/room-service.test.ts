@@ -181,7 +181,7 @@ describe('RoomService games', () => {
       setup('tap-race', true)
         .rooms.availableGames()
         .map((g) => g.id),
-    ).toEqual(['diwan', 'tap-race']);
+    ).toEqual(['diwan', 'cambio', 'tap-race']);
   });
 
   it('switches games in the lobby only', () => {
@@ -417,5 +417,104 @@ describe('RoomService room caps', () => {
     now = 5000;
     expect(rooms.sweepIdle()).toHaveLength(2);
     ok(rooms.createRoom(undefined, 'ip-c'));
+  });
+});
+
+describe('RoomService options', () => {
+  it('fills in defaults, merges patches, and passes the parsed options into the game', () => {
+    const { rooms, code } = setup('cambio');
+    expect(rooms.hostView(code)?.room.options).toEqual({
+      scoringMode: 'single',
+      matchTarget: 100,
+      lockCaller: true,
+      rememberPeeks: false,
+    });
+    ok(rooms.setOptions(code, { scoringMode: 'match' }));
+    ok(rooms.setOptions(code, { matchTarget: 40 }));
+    const vip = ok(rooms.join(code, 'Amina'));
+    ok(rooms.addBot(code));
+    ok(rooms.start(code, vip.playerId));
+    expect((rooms.hostView(code)?.game as { options: unknown }).options).toEqual({
+      scoringMode: 'match',
+      matchTarget: 40,
+      lockCaller: true,
+      rememberPeeks: false,
+    });
+  });
+
+  it('rejects bad values, games without options, and changes once the game starts', () => {
+    const { rooms, code } = setup('cambio');
+    expect(errorCode(rooms.setOptions(code, { matchTarget: 5 }))).toBe('invalid_options');
+    expect(errorCode(rooms.setOptions(code, { matchTarget: 50.5 }))).toBe('invalid_options');
+    expect(errorCode(rooms.setOptions(code, { scoringMode: 'bogus' }))).toBe('invalid_options');
+    expect(errorCode(rooms.setOptions(code, { lockCaller: 'yes' }))).toBe('invalid_options');
+    expect(rooms.hostView(code)?.room.options).toMatchObject({ matchTarget: 100 });
+
+    ok(rooms.setGame(code, 'diwan'));
+    expect(rooms.hostView(code)?.room.options).toBeNull();
+    expect(errorCode(rooms.setOptions(code, { anything: 1 }))).toBe('invalid_options');
+
+    ok(rooms.setGame(code, 'cambio'));
+    ok(rooms.setOptions(code, { lockCaller: false }));
+    ok(rooms.setGame(code, 'tap-race'));
+    ok(rooms.setGame(code, 'cambio'));
+    expect(rooms.hostView(code)?.room.options).toMatchObject({ lockCaller: false });
+
+    ok(rooms.addBot(code));
+    ok(rooms.addBot(code));
+    ok(rooms.devStart(code));
+    expect(errorCode(rooms.setOptions(code, { lockCaller: true }))).toBe('wrong_phase');
+  });
+});
+
+describe('RoomService VIP-only actions', () => {
+  /** Plays every bot and human through the initial peek, then turn moves until the round ends. */
+  function toRoundOver(rooms: RoomService, code: string, humans: string[]) {
+    for (let i = 0; i < 500; i++) {
+      const view = rooms.hostView(code)?.game as { phase: string } | null;
+      if (view?.phase === 'roundOver') return;
+      const pending = [...rooms.botTurns(code)];
+      for (const id of humans) {
+        const actions = (
+          rooms.playerView(code, id)?.game as { legalActions: { type: string }[] }
+        ).legalActions.filter((a) => a.type !== 'snap' && a.type !== 'continue');
+        if (actions.length > 0) pending.push({ botId: id, actions });
+      }
+      const turn = pending[0];
+      if (!turn) throw new Error('Nobody can move');
+      // Call Cambio as soon as it is allowed, so the round ends quickly.
+      const call = turn.actions.find((a) => (a as { type: string }).type === 'callCambio');
+      ok(rooms.act(code, turn.botId, call ?? turn.actions[0]));
+    }
+    throw new Error('Round never ended');
+  }
+
+  it('lets only the VIP start the next round, and keeps bots from doing it for them', () => {
+    const { rooms, code } = setup('cambio');
+    ok(rooms.setOptions(code, { scoringMode: 'match' }));
+    const vip = ok(rooms.join(code, 'Amina'));
+    const other = ok(rooms.join(code, 'Bilal'));
+    ok(rooms.addBot(code));
+    ok(rooms.start(code, vip.playerId));
+    toRoundOver(rooms, code, [vip.playerId, other.playerId]);
+
+    expect(rooms.botTurns(code)).toEqual([]);
+    expect(rooms.hostView(code)?.waitingOn).toEqual([vip.playerId]);
+    expect(errorCode(rooms.act(code, other.playerId, { type: 'continue' }))).toBe('not_vip');
+    ok(rooms.act(code, vip.playerId, { type: 'continue' }));
+    expect(rooms.hostView(code)?.game).toMatchObject({ phase: 'peek', round: 2 });
+  });
+
+  it('lets bots continue in a room with no human VIP', () => {
+    const { rooms, code } = setup('cambio');
+    ok(rooms.setOptions(code, { scoringMode: 'match' }));
+    for (let i = 0; i < 3; i++) ok(rooms.addBot(code));
+    ok(rooms.devStart(code));
+    toRoundOver(rooms, code, []);
+    const turns = rooms.botTurns(code);
+    expect(turns).toHaveLength(3);
+    expect(turns.every((t) => t.actions.length === 1)).toBe(true);
+    ok(rooms.act(code, turns[0]!.botId, turns[0]!.actions[0]));
+    expect(rooms.hostView(code)?.game).toMatchObject({ round: 2 });
   });
 });

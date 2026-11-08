@@ -26,6 +26,8 @@ export function testConfig(overrides: Partial<ServerConfig> = {}): ServerConfig 
     isProd: false,
     port: 0,
     devTools: true,
+    // Production-like servers keep Cambio off unless a test turns it on.
+    enableCambio: overrides.devTools ?? true,
     bots: undefined,
     allowedOrigin: undefined,
     joinDisplayUrl: undefined,

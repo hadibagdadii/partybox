@@ -69,6 +69,7 @@ Optional:
 | Variable           | Value                       | Why                                                                                                                                            |
 | ------------------ | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | `JOIN_DISPLAY_URL` | a short address you control | The TV lobby shows "Or go to `<JOIN_DISPLAY_URL>` and enter `<CODE>`" next to the QR code. Unset, it shows the full `/play?code=` URL instead. |
+| `ENABLE_CAMBIO`    | `true`                      | Offers Cambio in the TV's game picker. Unset or `false`, only Diwan is offered. Read at runtime: saving it redeploys, no rebuild needed.       |
 
 `JOIN_DISPLAY_URL` is display text only, read by the server at runtime (no rebuild needed; saving it redeploys). Point it at something that redirects to this service, such as a custom domain or a short link. The QR code never uses it: it always encodes the page's own origin, so it works on Render, the laptop tunnel, and dev alike.
 
@@ -117,6 +118,7 @@ Service → **Variables**:
 | `TRUST_PROXY_HOPS` | default `1`                               | Optional. Proxies in front of the app whose `X-Forwarded-For` entry is trusted. See step 5.                        |
 | `CLIENT_IP_HEADER` | unset                                     | Optional. A header a proxy overwrites with the client IP (e.g. `cf-connecting-ip`). Wins over `TRUST_PROXY_HOPS`.  |
 | `JOIN_DISPLAY_URL` | unset                                     | Optional. Short address the TV lobby shows as text next to the QR code. See [Render free tier](#render-free-tier). |
+| `ENABLE_CAMBIO`    | unset                                     | Optional. `true` offers Cambio in the TV's game picker; unset or `false` offers only Diwan. Read at runtime.       |
 
 Don't set `PORT`: Railway injects it and the server listens on it. Don't set `BOT_MIN_DELAY_MS` / `BOT_MAX_DELAY_MS`: they're ignored in production anyway.
 

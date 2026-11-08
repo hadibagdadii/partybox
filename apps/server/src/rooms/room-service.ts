@@ -13,9 +13,9 @@ import type { Room, Seat } from './room.js';
 export { AWAY_LONG_MS } from './room.js';
 import { silentLogger, type Logger } from '../logger.js';
 import type { RoomStore } from './room-store.js';
-import { buildHostView, buildPlayerView } from './views.js';
+import { buildHostView, buildPlayerView, maySend, roomOptions } from './views.js';
 
-/** A bot seat the game is waiting on, with every action it may take. */
+/** A bot seat the game is waiting on, with every action it may take on its turn. */
 export interface BotTurn {
   botId: string;
   actions: unknown[];
@@ -35,6 +35,17 @@ export interface RoomServiceOptions {
   /** Rooms one owner (client IP hash) may hold open at once. */
   maxRoomsPerOwner?: number;
   logger?: Logger;
+  /**
+   * Per game id: which legal actions count as a bot's turn move. Out-of-turn moves such as
+   * Cambio snaps are left to the bot runner's reflexes.
+   */
+  botTurnFilters?: ReadonlyMap<string, (action: unknown) => boolean>;
+}
+
+/** A bot seat in a running game, for out-of-turn moves built from the host view. */
+export interface BotSeat {
+  botId: string;
+  gameId: string;
 }
 
 export const DEFAULT_MAX_ROOMS = 200;
@@ -64,6 +75,7 @@ export class RoomService {
   private readonly maxRooms: number;
   private readonly maxRoomsPerOwner: number;
   private readonly logger: Logger;
+  private readonly botTurnFilters: ReadonlyMap<string, (action: unknown) => boolean>;
 
   constructor(options: RoomServiceOptions) {
     this.store = options.store;
@@ -75,6 +87,7 @@ export class RoomService {
     this.maxRooms = options.maxRooms ?? DEFAULT_MAX_ROOMS;
     this.maxRoomsPerOwner = options.maxRoomsPerOwner ?? DEFAULT_MAX_ROOMS_PER_OWNER;
     this.logger = options.logger ?? silentLogger;
+    this.botTurnFilters = options.botTurnFilters ?? new Map();
   }
 
   /** `ownerKey` identifies the creator (an IP hash) for the per-owner cap. */
@@ -106,6 +119,7 @@ export class RoomService {
       seats: [],
       vipId: null,
       game: null,
+      options: new Map(),
       rng: createRng(this.randInt(2 ** 31)),
       tutorial: null,
       removedTokens: new Set(),
@@ -131,8 +145,30 @@ export class RoomService {
     return { ok: true };
   }
 
+  /** Host changes some of the current game's options in the lobby. */
+  setOptions(code: string, patch: Record<string, unknown>): AckResult {
+    const room = this.store.get(code);
+    if (!room) return roomNotFound();
+    const game = this.gameFor(room);
+    if (room.phase !== 'lobby') return fail('wrong_phase', 'Options can only change in the lobby');
+    const current = roomOptions(room, game);
+    if (!game.optionsSchema || !current) {
+      return fail('invalid_options', `${game.displayName} has no options`);
+    }
+    const parsed = game.optionsSchema.safeParse({ ...current, ...patch });
+    if (!parsed.success) return fail('invalid_options', 'Those options are not valid');
+    room.options.set(game.id, parsed.data as Record<string, unknown>);
+    this.store.save(room);
+    return { ok: true };
+  }
+
   availableGames(): GameOption[] {
-    return [...this.games.values()].map((g) => ({ id: g.id, name: g.displayName }));
+    return [...this.games.values()].map((g) => ({
+      id: g.id,
+      name: g.displayName,
+      minPlayers: g.minPlayers,
+      maxPlayers: g.maxPlayers,
+    }));
   }
 
   resumeHost(code: string, hostToken: string): AckResult {
@@ -216,7 +252,8 @@ export class RoomService {
     }
     const rng = createRng(room.rng.int(2 ** 31));
     const seats = room.seats.map((s) => ({ id: s.id, name: s.name }));
-    room.game = { state: game.createInitialState(seats, rng), rng };
+    const options = roomOptions(room, game) ?? undefined;
+    room.game = { state: game.createInitialState(seats, rng, options), rng };
     room.phase = 'playing';
     room.tutorial = null;
     this.store.save(room);
@@ -273,6 +310,9 @@ export class RoomService {
     const game = this.gameFor(room);
     const parsed = game.actionSchema.safeParse(rawAction);
     if (!parsed.success) return fail('invalid_action', 'That action is not valid');
+    if (!maySend(room, game, playerId, parsed.data)) {
+      return fail('not_vip', 'Only the VIP can do that');
+    }
 
     const result = game.reduce(room.game.state, { playerId, action: parsed.data }, room.game.rng);
     if (!result.ok) return { ok: false, error: result.error };
@@ -361,10 +401,23 @@ export class RoomService {
     if (!game.waitingOn || !game.legalActions) return [];
     const { state } = room.game;
     const waiting = new Set(game.waitingOn(state));
+    const isTurn = this.botTurnFilters.get(game.id) ?? (() => true);
     return room.seats
       .filter((s) => s.isBot && waiting.has(s.id))
-      .map((s) => ({ botId: s.id, actions: game.legalActions?.(state, s.id) ?? [] }))
+      .map((s) => ({
+        botId: s.id,
+        actions: (game.legalActions?.(state, s.id) ?? []).filter(
+          (a) => isTurn(a) && maySend(room, game, s.id, a),
+        ),
+      }))
       .filter((turn) => turn.actions.length > 0);
+  }
+
+  /** Every bot seat while a game is being played, whether or not it is their turn. */
+  botSeats(code: string): BotSeat[] {
+    const room = this.store.get(code);
+    if (!room || room.phase !== 'playing' || !room.game) return [];
+    return room.seats.filter((s) => s.isBot).map((s) => ({ botId: s.id, gameId: room.gameId }));
   }
 
   sweepIdle(): string[] {

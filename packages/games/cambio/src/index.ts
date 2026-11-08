@@ -47,4 +47,5 @@ export const cambioModule: GameModule<
   isOver: (state) => state.phase === 'over',
   waitingOn,
   legalActions,
+  vipOnlyActions: ['continue'],
 };

@@ -26,6 +26,10 @@ export type CreateRoomPayload = z.input<typeof createRoomSchema>;
 export const setGameSchema = z.object({ gameId: z.string().min(1).max(40) });
 export type SetGamePayload = z.input<typeof setGameSchema>;
 
+/** A partial options patch; the game's own optionsSchema validates the merged result. */
+export const setOptionsSchema = z.object({ options: z.record(z.unknown()) }).strict();
+export type SetOptionsPayload = z.input<typeof setOptionsSchema>;
+
 export const joinRoomSchema = z.object({ code: roomCodeSchema, name: playerNameSchema });
 export type JoinRoomPayload = z.input<typeof joinRoomSchema>;
 
@@ -62,6 +66,7 @@ export type ErrorCode =
   | 'not_vip'
   | 'not_enough_players'
   | 'unknown_game'
+  | 'invalid_options'
   | 'no_tutorial'
   | 'cannot_remove'
   | 'removed'
@@ -109,11 +114,15 @@ export interface LobbyView {
   players: LobbyPlayer[];
   /** Set while the lobby is showing the game's tutorial. */
   tutorial: TutorialView | null;
+  /** The game's host options, defaults filled in; null for games without options. */
+  options: Record<string, unknown> | null;
 }
 
 export interface GameOption {
   id: string;
   name: string;
+  minPlayers: number;
+  maxPlayers: number;
 }
 
 export interface HostViewMessage {
@@ -142,6 +151,8 @@ export interface ClientToServerEvents {
   ) => void;
   'host:resume': (payload: ResumeHostPayload, ack: Ack) => void;
   'room:setGame': (payload: SetGamePayload, ack: Ack) => void;
+  /** Host, in the lobby: changes some of the game's options. */
+  'room:setOptions': (payload: SetOptionsPayload, ack: Ack) => void;
   'room:join': (
     payload: JoinRoomPayload,
     ack: Ack<{ code: string; playerId: string; playerToken: string }>,

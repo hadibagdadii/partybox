@@ -52,6 +52,11 @@ export interface GameModule<State, Action, Event, HostView, PlayerView, Options 
   waitingOn?(state: State): string[];
   /** Every action `playerId` may send right now. Dev bots pick from these. */
   legalActions?(state: State, playerId: string): Action[];
+  /**
+   * Action `type`s only the room's VIP may send (e.g. starting the next round). The engine accepts
+   * them from anyone; the room enforces who sends them.
+   */
+  vipOnlyActions?: readonly string[];
   /** Neutral id of the winning team once the game is over, for server logs. */
   winnerTeam?(state: State): string | null;
 }

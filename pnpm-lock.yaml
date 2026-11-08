@@ -44,6 +44,9 @@ importers:
 
   apps/server:
     dependencies:
+      '@partybox/cambio':
+        specifier: workspace:*
+        version: link:../../packages/games/cambio
       '@partybox/diwan':
         specifier: workspace:*
         version: link:../../packages/games/diwan
@@ -87,6 +90,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@partybox/cambio':
+        specifier: workspace:*
+        version: link:../../packages/games/cambio
       '@partybox/diwan':
         specifier: workspace:*
         version: link:../../packages/games/diwan

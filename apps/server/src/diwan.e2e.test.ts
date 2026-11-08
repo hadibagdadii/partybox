@@ -134,7 +134,7 @@ describe('Diwan over real sockets', () => {
     const tvLog = record(tv);
     const { code } = await ok(tv.emitWithAck('room:create', {}));
     await until(() => tvLog.host.length > 0);
-    expect(tvLog.host.at(-1)?.games.map((g) => g.id)).toEqual(['diwan', 'tap-race']);
+    expect(tvLog.host.at(-1)?.games.map((g) => g.id)).toEqual(['diwan', 'cambio', 'tap-race']);
 
     const phone = await s.client();
     await ok(phone.emitWithAck('room:join', { code, name: 'Amina' }));

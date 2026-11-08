@@ -10,6 +10,7 @@ COPY apps/server/package.json apps/server/
 COPY apps/web/package.json apps/web/
 COPY packages/shared/package.json packages/shared/
 COPY packages/games/diwan/package.json packages/games/diwan/
+COPY packages/games/cambio/package.json packages/games/cambio/
 COPY packages/games/tap-race/package.json packages/games/tap-race/
 RUN pnpm install --frozen-lockfile
 
@@ -27,6 +28,7 @@ COPY --from=build /app/apps/server/package.json apps/server/
 COPY --from=build /app/apps/web/package.json apps/web/
 COPY --from=build /app/packages/shared/package.json packages/shared/
 COPY --from=build /app/packages/games/diwan/package.json packages/games/diwan/
+COPY --from=build /app/packages/games/cambio/package.json packages/games/cambio/
 COPY --from=build /app/packages/games/tap-race/package.json packages/games/tap-race/
 RUN pnpm install --frozen-lockfile --prod --filter "@partybox/server..." \
   && npm uninstall -g pnpm \
@@ -37,6 +39,7 @@ COPY --from=build /app/apps/web/dist apps/web/dist
 COPY --from=build /app/packages/shared/dist packages/shared/dist
 COPY --from=build /app/packages/games/diwan/dist packages/games/diwan/dist
 COPY --from=build /app/packages/games/diwan/LICENSE packages/games/diwan/LICENSE
+COPY --from=build /app/packages/games/cambio/dist packages/games/cambio/dist
 COPY --from=build /app/packages/games/tap-race/dist packages/games/tap-race/dist
 
 USER node

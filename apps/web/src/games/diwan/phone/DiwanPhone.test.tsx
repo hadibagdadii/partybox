@@ -16,6 +16,7 @@ const room: LobbyView = {
   phase: 'playing',
   players: [],
   tutorial: null,
+  options: null,
 };
 
 let seat = 0;

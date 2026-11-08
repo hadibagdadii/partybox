@@ -1,3 +1,5 @@
+import type { ReflexOutcome } from './rooms/bot-runner.js';
+
 export interface Limit {
   max: number;
   windowMs: number;
@@ -8,8 +10,18 @@ export interface ServerConfig {
   port: number;
   /** Dev-only socket events, bots, and Tap Race. Always off in production. */
   devTools: boolean;
+  /** Offers Cambio in the game picker. Always on in dev; production needs ENABLE_CAMBIO=true. */
+  enableCambio: boolean;
   /** Bot timing and seed; tests set the delays to 0. Ignored without dev tools. */
-  bots: { minDelayMs?: number; maxDelayMs?: number; seed?: number } | undefined;
+  bots:
+    | {
+        minDelayMs?: number | undefined;
+        maxDelayMs?: number | undefined;
+        seed?: number;
+        /** Test hook: every out-of-turn bot move and its result. */
+        onReflex?: (outcome: ReflexOutcome) => void;
+      }
+    | undefined;
   /** Extra browser origin allowed to open sockets. Same-origin always works. */
   allowedOrigin: string | undefined;
   maxRooms: number;
@@ -59,12 +71,21 @@ export function loadConfig(env: Env, defaults: { webDist?: string } = {}): Loade
     return Number.isFinite(n) && n >= 0 ? n : undefined;
   };
 
+  const flag = (key: string): boolean => {
+    const raw = env[key]?.trim().toLowerCase();
+    if (raw === undefined || raw === '' || raw === 'false' || raw === '0') return false;
+    if (raw === 'true' || raw === '1') return true;
+    warnings.push(`${key} must be true or false; leaving it off`);
+    return false;
+  };
+
   return {
     warnings,
     config: {
       isProd,
       port: int('PORT', 3000, 1),
       devTools: !isProd,
+      enableCambio: isProd ? flag('ENABLE_CAMBIO') : true,
       bots: isProd
         ? undefined
         : { minDelayMs: botMs('BOT_MIN_DELAY_MS'), maxDelayMs: botMs('BOT_MAX_DELAY_MS') },

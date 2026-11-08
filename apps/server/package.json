@@ -10,6 +10,7 @@
     "smoke": "tsx --conditions=development src/smoke-cli.ts"
   },
   "dependencies": {
+    "@partybox/cambio": "workspace:*",
     "@partybox/diwan": "workspace:*",
     "@partybox/shared": "workspace:*",
     "@partybox/tap-race": "workspace:*",

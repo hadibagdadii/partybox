@@ -24,6 +24,8 @@ export interface Room {
   seats: Seat[];
   vipId: string | null;
   game: { state: unknown; rng: Rng } | null;
+  /** Host options by game id, parsed with defaults filled in. Kept when the host switches games. */
+  options: Map<string, Record<string, unknown>>;
   /** Seeds every game and shuffles seats for Play again, so a room replays from one seed. */
   rng: Rng;
   /** 0-based tutorial slide while the lobby shows the tutorial, else null. */

@@ -11,6 +11,7 @@ const room = (code: string): Room => ({
   seats: [],
   vipId: null,
   game: null,
+  options: new Map(),
   rng: createRng(1),
   tutorial: null,
   removedTokens: new Set(),

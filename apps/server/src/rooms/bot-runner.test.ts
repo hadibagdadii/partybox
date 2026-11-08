@@ -1,7 +1,9 @@
 import { createRng, type AckResult } from '@partybox/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_GAME_ID, createGameRegistry } from '../games.js';
-import { BOT_MAX_DELAY_MS, BOT_MIN_DELAY_MS, BotRunner } from './bot-runner.js';
+import type { CambioAction, CambioHostView } from '@partybox/cambio';
+import { botStrategies, botTurnFilters } from '../bots/strategies.js';
+import { BOT_MAX_DELAY_MS, BOT_MIN_DELAY_MS, BotRunner, type ReflexOutcome } from './bot-runner.js';
 import { MemoryRoomStore } from './room-store.js';
 import { RoomService } from './room-service.js';
 
@@ -90,5 +92,71 @@ describe('BotRunner', () => {
     expect(vi.getTimerCount()).toBe(0);
     vi.advanceTimersByTime(BOT_MAX_DELAY_MS * 2);
     expect(changes).toEqual([]);
+  });
+});
+
+describe('BotRunner reflexes (Cambio)', () => {
+  function cambio(botCount: number, seed = 3) {
+    let id = 0;
+    const rooms = new RoomService({
+      store: new MemoryRoomStore(),
+      games: createGameRegistry({ devTools: true }),
+      defaultGameId: DEFAULT_GAME_ID,
+      randInt: createRng(seed).int,
+      newId: () => `id-${++id}`,
+      botTurnFilters,
+    });
+    const { code } = ok(rooms.createRoom('cambio'));
+    for (let i = 0; i < botCount; i++) ok(rooms.addBot(code));
+    const reflexes: ReflexOutcome[] = [];
+    const bots: BotRunner = new BotRunner({
+      rooms,
+      rng: createRng(seed + 1),
+      strategies: botStrategies,
+      onChange: (c) => bots.sync(c),
+      onReflex: (r) => reflexes.push(r),
+    });
+    return { rooms, code, bots, reflexes };
+  }
+
+  it('never picks a snap as a turn move', () => {
+    const { rooms, code } = cambio(3);
+    ok(rooms.devStart(code));
+    for (const turn of rooms.botTurns(code)) {
+      expect(turn.actions.every((a) => (a as CambioAction).type !== 'snap')).toBe(true);
+    }
+  });
+
+  it('snaps out of turn using only ids the host view shows, and stops with the room', () => {
+    const { rooms, code, bots, reflexes } = cambio(6);
+    ok(rooms.devStart(code));
+    bots.sync(code);
+    const seen = new Set<string>();
+    for (let i = 0; i < 4000 && rooms.hostView(code)?.room.phase !== 'over'; i++) {
+      const view = rooms.hostView(code)?.game as CambioHostView;
+      for (const p of view.players) for (const s of p.slots) seen.add(`${s.slotId}/${s.cardId}`);
+      vi.advanceTimersByTime(BOT_MAX_DELAY_MS);
+    }
+    expect(rooms.hostView(code)?.room.phase).toBe('over');
+    expect(reflexes.length).toBeGreaterThan(0);
+    for (const { action } of reflexes) {
+      const snap = action as Extract<CambioAction, { type: 'snap' }>;
+      expect(snap.type).toBe('snap');
+      expect(seen.has(`${snap.slotId}/${snap.cardId}`)).toBe(true);
+    }
+    expect(bots.pendingReflexes(code)).toEqual([]);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('cancels pending reflexes with the room', () => {
+    const { rooms, code, bots } = cambio(12);
+    ok(rooms.devStart(code));
+    bots.sync(code);
+    for (let i = 0; i < 200 && bots.pendingReflexes(code).length === 0; i++) {
+      vi.advanceTimersByTime(BOT_MIN_DELAY_MS);
+    }
+    expect(bots.pendingReflexes(code).length).toBeGreaterThan(0);
+    bots.cancel(code);
+    expect(vi.getTimerCount()).toBe(0);
   });
 });

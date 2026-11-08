@@ -4,6 +4,7 @@ import type { AddressInfo } from 'node:net';
 import { Server } from 'socket.io';
 import { createApp } from './app.js';
 import type { ServerConfig } from './config.js';
+import { botTurnFilters } from './bots/strategies.js';
 import { DEFAULT_GAME_ID, createGameRegistry } from './games.js';
 import type { Logger } from './logger.js';
 import { RoomService } from './rooms/room-service.js';
@@ -68,8 +69,9 @@ export function createPartyboxServer(
 
   const rooms = new RoomService({
     store,
-    games: createGameRegistry({ devTools: config.devTools }),
+    games: createGameRegistry({ devTools: config.devTools, enableCambio: config.enableCambio }),
     defaultGameId: DEFAULT_GAME_ID,
+    botTurnFilters,
     maxRooms: config.maxRooms,
     maxRoomsPerOwner: config.maxRoomsPerIp,
     logger,

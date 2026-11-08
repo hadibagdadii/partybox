@@ -8,6 +8,7 @@ import {
   resumeHostSchema,
   resumePlayerSchema,
   setGameSchema,
+  setOptionsSchema,
   tutorialStepSchema,
   type Ack,
   type AckResult,
@@ -21,6 +22,7 @@ import { clientIp } from './client-ip.js';
 import { DEFAULT_LIMITS, type ServerConfig } from './config.js';
 import { hashIp, silentLogger, type Logger } from './logger.js';
 import { RateLimiter } from './rate-limit.js';
+import { botStrategies } from './bots/strategies.js';
 import { BotRunner } from './rooms/bot-runner.js';
 import { AWAY_LONG_MS, type RoomService } from './rooms/room-service.js';
 
@@ -37,7 +39,7 @@ export interface SocketOptions {
   /** Enables dev-only events such as adding bots, and runs the bots. */
   devTools: boolean;
   /** Bot timing and seed; tests set the delays to 0. */
-  bots?: { minDelayMs?: number; maxDelayMs?: number; seed?: number } | undefined;
+  bots?: ServerConfig['bots'];
   /** Per-IP limits on creating and joining rooms. */
   limits?: ServerConfig['limits'];
   /** Proxies in front of the server whose X-Forwarded-For entries are trusted. */
@@ -112,6 +114,8 @@ export function registerSocketHandlers(
         rng: createRng(options.bots?.seed ?? randomInt(2 ** 31)),
         minDelayMs: options.bots?.minDelayMs,
         maxDelayMs: options.bots?.maxDelayMs,
+        strategies: botStrategies,
+        onReflex: options.bots?.onReflex,
         onChange: (code) => broadcast(code),
       })
     : null;
@@ -258,6 +262,12 @@ export function registerSocketHandlers(
       const input = parse(setGameSchema, payload);
       if (!input) return replier(ack)(invalidPayload);
       asHost(socket, ack, (code) => rooms.setGame(code, input.gameId));
+    });
+
+    socket.on('room:setOptions', (payload, ack) => {
+      const input = parse(setOptionsSchema, payload);
+      if (!input) return replier(ack)(invalidPayload);
+      asHost(socket, ack, (code) => rooms.setOptions(code, input.options));
     });
 
     socket.on('room:join', (payload, ack) => {

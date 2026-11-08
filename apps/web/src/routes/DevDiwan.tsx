@@ -12,6 +12,7 @@ const room: LobbyView = {
   phase: 'playing',
   players: [],
   tutorial: null,
+  options: null,
 };
 
 /** Dev-only: every Diwan phone screen rendered from fixtures, for design review. */

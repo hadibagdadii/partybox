@@ -13,6 +13,7 @@
   "references": [
     { "path": "../../packages/shared" },
     { "path": "../../packages/games/diwan" },
+    { "path": "../../packages/games/cambio" },
     { "path": "../../packages/games/tap-race" }
   ]
 }

@@ -81,4 +81,19 @@ describe('loadConfig', () => {
     expect(config.maxRooms).toBe(200);
     expect(warnings).toHaveLength(2);
   });
+
+  it('always offers Cambio in dev, and in production only when ENABLE_CAMBIO turns it on', () => {
+    expect(loadConfig({}).config.enableCambio).toBe(true);
+    expect(loadConfig({ ENABLE_CAMBIO: 'false' }).config.enableCambio).toBe(true);
+    const prod = (value?: string) => loadConfig({ NODE_ENV: 'production', ENABLE_CAMBIO: value });
+    expect(prod().config.enableCambio).toBe(false);
+    expect(prod('').config.enableCambio).toBe(false);
+    expect(prod('false').config.enableCambio).toBe(false);
+    expect(prod('true').config.enableCambio).toBe(true);
+    expect(prod(' TRUE ').config.enableCambio).toBe(true);
+    expect(prod('1').config.enableCambio).toBe(true);
+    const junk = prod('yes please');
+    expect(junk.config.enableCambio).toBe(false);
+    expect(junk.warnings).toEqual(['ENABLE_CAMBIO must be true or false; leaving it off']);
+  });
 });
