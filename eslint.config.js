@@ -9,8 +9,13 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ['**/*.{js,ts}'],
+    files: ['**/*.{js,mjs,ts}'],
     languageOptions: { globals: globals.node },
+  },
+  {
+    // Drives a browser: parts of it run inside the page.
+    files: ['scripts/cambio-fps.mjs'],
+    languageOptions: { globals: { ...globals.node, ...globals.browser } },
   },
   {
     files: ['apps/web/src/**/*.{ts,tsx}'],

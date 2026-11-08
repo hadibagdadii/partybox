@@ -8,6 +8,11 @@
       "types": "./src/index.ts",
       "development": "./src/index.ts",
       "default": "./dist/index.js"
+    },
+    "./fixtures": {
+      "types": "./src/fixtures.ts",
+      "development": "./src/fixtures.ts",
+      "default": "./dist/fixtures.js"
     }
   },
   "scripts": {

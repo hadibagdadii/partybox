@@ -137,6 +137,10 @@ export const theme = {
   tagline: 'Lowest hand wins. Remember what you peek, snap what matches.',
   ranks,
   suits,
+  /** Words for cards as drawn on screen. */
+  cards: {
+    faceDown: 'Face-down card',
+  },
   powers,
   phases,
   stages,

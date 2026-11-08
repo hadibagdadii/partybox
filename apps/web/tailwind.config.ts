@@ -1,15 +1,17 @@
 import type { Config } from 'tailwindcss';
+import { colors as cambioColors, fonts as cambioFonts } from './src/games/cambio/tokens';
 import { colors, fonts, motion, radii, shadows, spacing, tvType } from './src/games/diwan/tokens';
 
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
     extend: {
-      colors: { court: colors },
+      colors: { court: colors, cambio: cambioColors },
       fontFamily: {
         display: [...fonts.display],
         serif: [...fonts.serif],
         sans: [...fonts.sans],
+        card: [...cambioFonts.card],
       },
       fontSize: Object.fromEntries(
         Object.entries(tvType).map(([k, v]) => [`tv-${k}`, [v, { lineHeight: '1.2' }]]),

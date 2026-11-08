@@ -43,6 +43,9 @@ export function Dev() {
         <a href="/host" target="_blank" rel="noreferrer" className="text-amber-400 underline">
           Open host
         </a>
+        <a href="/dev/cambio-cards" className="text-amber-400 underline">
+          Cambio cards
+        </a>
       </header>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4">
         {Array.from({ length: n }, (_, i) => i + 1).map((slot) => (
