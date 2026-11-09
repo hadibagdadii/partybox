@@ -28,6 +28,6 @@ services:
       # Display only; the QR code always uses the page's real origin.
       - key: JOIN_DISPLAY_URL
         sync: false
-      # Offers Cambio in the game picker. Off unless set to true.
+      # Offers Cambio in the game picker and on the landing page. Off unless set to true.
       - key: ENABLE_CAMBIO
         sync: false

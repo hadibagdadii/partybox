@@ -5,11 +5,19 @@ import {
   type CambioPlayerView,
   type CambioState,
 } from '@partybox/cambio';
-import { buildFixture, card, fillers, stackGame, type FixtureId } from '@partybox/cambio/fixtures';
+import {
+  buildFixture,
+  card,
+  FIXTURE_IDS,
+  fillers,
+  stackGame,
+  type FixtureId,
+} from '@partybox/cambio/fixtures';
 import { createRng, type LobbyView } from '@partybox/shared';
 import { act, cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it } from 'vitest';
+import { expectNoNamedLeak, publicFaces } from '../test/leaks';
 import { CambioTv } from './CambioTv';
 import { matchLeaders } from './geometry';
 import { tickerLines } from './Ticker';
@@ -192,6 +200,34 @@ describe('the TV never shows a face-down card', () => {
     const { container } = renderTv(view);
     expectNoHiddenFace(container, view);
   });
+});
+
+describe('the TV never names a card that is not public', () => {
+  it.each([5, 12])(
+    'in any text or label, through every fixture at %i seats',
+    async (n) => {
+      for (const id of FIXTURE_IDS) {
+        const f = buildFixture(id, n);
+        // Handed the peeker's full view, as a bug might: only public faces may ever be named.
+        for (const pick of ['host', 'peeker'] as const) {
+          const first = pick === 'host' ? f.before.host : f.before.peeker;
+          const { container, rerender } = renderTv(first);
+          let allowed = publicFaces(first);
+          expectNoNamedLeak(container, allowed, `${id} ${pick} before`);
+          for (const [i, step] of f.steps.entries()) {
+            const v = pick === 'host' ? step.host : step.peeker;
+            rerender(v);
+            allowed = allowed.concat(publicFaces(v));
+            expectNoNamedLeak(container, allowed, `${id} ${pick} step ${i}`);
+          }
+          await wait(20);
+          expectNoNamedLeak(container, allowed, `${id} ${pick} settled`);
+          cleanup();
+        }
+      }
+    },
+    60_000,
+  );
 });
 
 describe('the TV table', () => {

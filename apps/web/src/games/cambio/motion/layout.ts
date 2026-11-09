@@ -335,7 +335,14 @@ export interface MiniHandBox extends Box {
 /** Regions of the phone screen the DOM overlays line up with. All px within the layer. */
 export interface PhoneRegions {
   /** The other players' mini hands along the top. */
-  strip: { bottom: number; rows: number; miniW: number; hands: MiniHandBox[] };
+  strip: {
+    bottom: number;
+    rows: number;
+    miniW: number;
+    hands: MiniHandBox[];
+    /** The Rules chip's hit area: the strip's top-right corner, kept clear of every hand. */
+    rulesChip: Box;
+  };
   /** The Cambio banner's center line, just under the strip. */
   bannerY: number;
   /** Your hand's box; cards and their hit targets live inside it. */
@@ -371,6 +378,10 @@ const BANNER_H = 34;
 /** Room the action bar keeps at the bottom: a 56 px primary button, a 48 px row, gaps. */
 export const ACTION_H = 150;
 const SIDE = 16;
+/** The Rules chip's hit area, a square at the strip's top right. The strip lays out beside it. */
+export const RULES_CHIP = 44;
+const CHIP_INSET = 2;
+const CHIP_RESERVE = RULES_CHIP + CHIP_INSET + 2;
 
 const miniGap = (w: number) => Math.max(2, w * 0.08);
 /** Width of a mini hand's box for `cols` columns of cards `w` wide. */
@@ -429,14 +440,22 @@ export function phoneLayout(
 ): PhoneLayout {
   const others = playerIds.filter((id) => id !== youId);
   const colsOf = (id: string) => Math.max(2, cols[id] ?? 2);
+  // Mini hands share the strip with the Rules chip: they center in the width left of it.
+  const stripW = width - CHIP_RESERVE;
+  const rulesChip: Box = {
+    x: width - CHIP_INSET - RULES_CHIP,
+    y: CHIP_INSET,
+    w: RULES_CHIP,
+    h: RULES_CHIP,
+  };
 
   let nRows = Math.max(1, Math.ceil(others.length / STRIP_PER_ROW));
   let rows = splitRows(others, nRows);
-  let miniW = fitMini(width, height, rows, colsOf);
+  let miniW = fitMini(stripW, height, rows, colsOf);
   while (miniW < MINI_MIN && nRows < Math.min(MAX_ROWS, others.length)) {
     nRows += 1;
     rows = splitRows(others, nRows);
-    miniW = fitMini(width, height, rows, colsOf);
+    miniW = fitMini(stripW, height, rows, colsOf);
   }
   if (!others.length) rows = [];
   const miniH = miniW * CARD_RATIO;
@@ -448,7 +467,7 @@ export function phoneLayout(
     const total =
       row.reduce((n, id) => n + miniBoxW(colsOf(id), miniW), 0) + (row.length - 1) * HAND_GAP;
     // Each row is centered, so a short last row sits in the middle.
-    let x = (width - total) / 2;
+    let x = (stripW - total) / 2;
     const y = STRIP_TOP + r * (boxH + ROW_GAP);
     for (const id of row) {
       const w = miniBoxW(colsOf(id), miniW);
@@ -456,7 +475,10 @@ export function phoneLayout(
       x += w + HAND_GAP;
     }
   });
-  const stripBottom = rows.length ? STRIP_TOP + rows.length * (boxH + ROW_GAP) : STRIP_TOP;
+  const stripBottom = Math.max(
+    rows.length ? STRIP_TOP + rows.length * (boxH + ROW_GAP) : STRIP_TOP,
+    rulesChip.y + rulesChip.h,
+  );
   const bannerY = stripBottom + BANNER_H / 2;
 
   const actionTop = height - ACTION_H;
@@ -511,7 +533,7 @@ export function phoneLayout(
     discard: { x: width / 2 + pileW * 0.62, y: pileY, scale: pileW / sprite, rotate: 0 },
     seats,
     regions: {
-      strip: { bottom: stripBottom, rows: rows.length, miniW, hands },
+      strip: { bottom: stripBottom, rows: rows.length, miniW, hands, rulesChip },
       bannerY,
       hand: { top: handTop, bottom: handBottom },
       actionTop,

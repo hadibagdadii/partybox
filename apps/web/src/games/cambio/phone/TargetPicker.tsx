@@ -1,6 +1,6 @@
 import { theme, type CambioPlayerView, type Face } from '@partybox/cambio';
 import { motion, useReducedMotion } from 'motion/react';
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { Card } from '../cards/Card';
 import { gridCell, handCols } from '../motion/layout';
 import { colors, ease } from '../tokens';
@@ -37,15 +37,20 @@ export function TargetPicker({
 }) {
   const reduced = useReducedMotion();
   const me = view.you?.id;
+  // Screen readers and keyboards land in the picker when it opens, not on the table behind.
+  const self = useRef<HTMLElement>(null);
+  useEffect(() => self.current?.focus({ preventScroll: true }), []);
   const shown = new Set(playerIds);
   return (
     <motion.section
+      ref={self}
+      tabIndex={-1}
       role="dialog"
       aria-label={title}
       initial={reduced ? false : { y: 24, opacity: 0.6 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.22, ease: ease.outQuint }}
-      className="pb-safe absolute inset-x-0 bottom-0 z-[120] flex max-h-[64%] flex-col rounded-t-[22px] font-card text-cambio-chalk"
+      className="pb-safe absolute inset-x-0 bottom-0 z-[120] flex max-h-[64%] flex-col rounded-t-[22px] font-card text-cambio-chalk outline-none"
       style={{
         background: '#06201a',
         boxShadow: '0 -1px 0 rgba(233,239,233,.12), 0 -18px 40px -12px rgba(0,0,0,.7)',
@@ -83,20 +88,28 @@ export function TargetPicker({
                           data-slot={s.slotId}
                           disabled={!ok}
                           aria-pressed={isPicked}
-                          aria-label={
+                          aria-label={theme.phone.cardLabel(
                             p.id === me
                               ? theme.phone.yourCard(s.pos + 1)
-                              : theme.phone.theirCard(p.name, s.pos + 1)
-                          }
+                              : theme.phone.theirCard(p.name, s.pos + 1),
+                            face,
+                            { selected: isPicked, locked: view.lockedPlayerId === p.id },
+                          )}
                           onClick={() => onPick(s.slotId)}
-                          className={`no-callout rounded-[6px] transition-[transform,opacity,filter] duration-150 ease-out active:scale-[0.94] motion-reduce:transition-none ${isPicked ? '' : 'disabled:opacity-30 disabled:grayscale'}`}
+                          className={`no-callout rounded-[6px] outline-none transition-[transform,opacity,filter] duration-150 ease-out focus-visible:shadow-[0_0_0_3px_#f2d27a] active:scale-[0.94] motion-reduce:transition-none ${isPicked ? '' : 'disabled:opacity-30 disabled:grayscale'}`}
                           style={{
                             gridColumn: col + 1,
                             gridRow: row + 1,
                             boxShadow: isPicked ? `0 0 0 3px ${colors.glow}` : undefined,
                           }}
                         >
-                          <Card face={face} faceUp={!!face} size={MINI} lifted={isPicked} />
+                          <Card
+                            face={face}
+                            faceUp={!!face}
+                            size={MINI}
+                            lifted={isPicked}
+                            decorative
+                          />
                         </button>
                       );
                     })}

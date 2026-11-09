@@ -150,6 +150,50 @@ const errors = {
   noSnapping: 'Snapping is closed right now.',
 };
 
+export interface TutorialSlide {
+  title: string;
+  /** Shown on the TV slide and in the phone's Rules sheet. */
+  body: string;
+  /** One short line the narrator reads aloud; also the TV caption. */
+  herald: string;
+}
+
+const r = (rank: Rank) => ranks[rank].name;
+
+/** The six tutorial topics, in order. The phone's Rules sheet reuses them. They restate RULES.md. */
+const tutorialSlides: readonly TutorialSlide[] = [
+  {
+    title: 'Lowest hand wins',
+    body: `You get four cards face down. Finish the round with the lowest total. ${r('joker')}s are 0, red ${r('K')}s are -1, ${r('A')}s are 1, number cards are their number, and ${r('J')}s, ${r('Q')}s, and black ${r('K')}s are 10.`,
+    herald: `Lowest hand wins. Red ${r('K')}s and ${r('joker')}s are your friends.`,
+  },
+  {
+    title: 'Your first peek',
+    body: 'Before the first turn, look at your bottom two cards once, then say you are ready. After that you only see your cards when a power lets you, so remember them.',
+    herald: 'Peek at your bottom two, and remember them.',
+  },
+  {
+    title: 'Your turn',
+    body: 'Draw the top card of the deck; only you see it. Swap it face down for any one of your cards and discard the old one, or discard the card you drew.',
+    herald: 'Draw, then swap or discard.',
+  },
+  {
+    title: 'Powers',
+    body: `Discard the card you just drew to use its power. 7 or 8, ${powers.peekOwn.name}: look at one of your cards. 9 or 10, ${powers.peekOther.name}: look at someone else's. ${r('J')}, ${powers.swapOthers.name}: swap two other players' cards unseen. ${r('Q')}, ${powers.swapAny.name}: swap any two players' cards, yours included. Black ${r('K')}, ${powers.peekSwap.name}: look at any card, then you may swap it.`,
+    herald: 'Discard what you drew to use its power.',
+  },
+  {
+    title: 'Snapping',
+    body: "Whenever the top discard matches a card's rank, anyone may snap that card onto it, even off turn. Snap someone else's card and you give them one of yours, unseen. Snap the wrong card and you take a penalty card.",
+    herald: 'Matching card? Snap it! Snap wrong and take a penalty.',
+  },
+  {
+    title: 'Calling Cambio',
+    body: 'Once everyone has had a turn, you may call Cambio at the start of yours instead of drawing. Everyone else gets one more turn, then every card is revealed. Lowest total wins, and if the caller ties for lowest, the others win the tie.',
+    herald: 'Think you are lowest? Call Cambio.',
+  },
+];
+
 export const theme = {
   title: 'Cambio',
   tagline: 'Lowest hand wins. Remember what you peek, snap what matches.',
@@ -201,6 +245,24 @@ export const theme = {
     yourHand: 'Your cards',
     yourCard: (n: number) => `Your card ${n}`,
     theirCard: (name: string, n: number) => `${name}'s card ${n}`,
+    /**
+     * A card button for screen readers: "Your card 3, face down" or "Your card 3, Seven of
+     * Hearts, you know it". `face` is only ever a face this viewer can see right now.
+     */
+    cardLabel: (
+      which: string,
+      face: Face | null,
+      flags: { known?: boolean; selected?: boolean; locked?: boolean } = {},
+    ) =>
+      [
+        which,
+        face ? cardName(face) : 'face down',
+        face && flags.known ? 'you know it' : null,
+        flags.selected ? 'selected' : null,
+        flags.locked ? 'locked' : null,
+      ]
+        .filter(Boolean)
+        .join(', '),
     cardCount: (n: number) => `${n} ${n === 1 ? 'card' : 'cards'}`,
     known: 'You know this card',
     holdToPeek: 'Press and hold your cards to peek at your bottom two',
@@ -281,6 +343,38 @@ export const theme = {
     endGameConfirm: 'End the game for everyone?',
     cancel: 'Cancel',
     newRoom: 'New room',
+  },
+  /** Lobby tutorial: six slides on the TV, driven from the VIP's phone. */
+  tutorial: {
+    slides: tutorialSlides,
+    title: 'How to play',
+    startWith: 'Start with tutorial',
+    next: 'Next',
+    back: 'Back',
+    skip: 'Skip',
+    begin: 'Start game',
+    watchTv: 'Watch the TV',
+    watchTvHint: 'The host is walking everyone through the rules.',
+    progress: (n: number, total: number) => `${n} of ${total}`,
+    /** The value chip under each card on the first slide. */
+    value: (points: number) => (points > 0 ? `${points}` : points === 0 ? '0' : `−${-points}`),
+    /** The power a looping slide is showing right now. */
+    nowShowing: (what: string) => `Now: ${what}`,
+    snapKinds: { snap: 'Snap your own', snapGive: 'Snap and give', wrongSnap: 'Wrong snap' },
+    turnKinds: { draw: 'Draw', swap: 'Swap it in', discard: 'Or discard it' },
+    callKinds: { call: 'Call Cambio', reveal: 'Reveal' },
+    peekKinds: { peekPhase: 'Peek at your bottom two' },
+  },
+  /** The phone's Rules sheet, built from the tutorial slides. */
+  rules: {
+    title: 'Rules',
+    open: 'Rules',
+    close: 'Close',
+  },
+  /** On the Partybox About page. */
+  about: {
+    title: 'Cambio',
+    body: 'Cambio is a traditional folk card game with no single author or license. This version is an original Partybox implementation.',
   },
   /** Short spoken lines, built only from public events. */
   herald: {

@@ -21,6 +21,7 @@ import {
 import { MiniHands } from './MiniHands';
 import { PeekMarker } from './PeekMarker';
 import { RoundEnd } from './RoundEnd';
+import { RulesSheet } from './RulesSheet';
 import { TargetPicker } from './TargetPicker';
 import { Btn } from './ui';
 
@@ -179,6 +180,12 @@ export function CambioPhone({ you: seat, game, act, reset, playAgain }: PlayerSc
   const myHand = view.players.find((p) => p.id === me)?.slots ?? [];
   const others = ids.filter((id) => id !== me);
   const known = new Set(view.known.map((k) => k.slotId));
+  // Faces your hand shows right now: what you remember, and a peek while it is face up.
+  const handLabelFaces: Record<string, Face> = Object.fromEntries(
+    view.known.map((k) => [k.slotId, k.face]),
+  );
+  if (peekVisible || (initialPeek && peekHold.held))
+    for (const p of view.peeks) handLabelFaces[p.slotId] = p.face;
   const peekFaces: Record<string, Face> =
     peeked && peekVisible ? { [peeked.slotId]: peeked.face } : {};
   const peekedMine = !!peeked && peeked.playerId === me;
@@ -502,6 +509,7 @@ export function CambioPhone({ you: seat, game, act, reset, playAgain }: PlayerSc
       {layout && (
         <>
           <MiniHands view={view} layout={layout} frame={frame} />
+          <RulesSheet chip={layout.regions.strip.rulesChip} />
           <PeekMarker
             players={view.players}
             viewerId={view.you?.id ?? null}
@@ -524,6 +532,8 @@ export function CambioPhone({ you: seat, game, act, reset, playAgain }: PlayerSc
             selected={sel}
             marked={marked}
             known={known}
+            faces={handLabelFaces}
+            locked={!!me && view.lockedPlayerId === me}
           />
           <SnapNotice layout={layout} notice={notice} />
           {result && !revealing && <RoundEnd view={view} result={result} layout={layout} />}

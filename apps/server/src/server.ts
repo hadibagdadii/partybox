@@ -48,11 +48,16 @@ export function createPartyboxServer(
   logger: Logger,
   store: RoomStore = new MemoryRoomStore(),
 ): PartyboxServer {
+  const games = createGameRegistry({
+    devTools: config.devTools,
+    enableCambio: config.enableCambio,
+  });
   const app = createApp({
     webDist: config.webDist,
     trustProxyHops: config.trustProxyHops,
     allowedOrigin: config.allowedOrigin,
     joinDisplayUrl: config.joinDisplayUrl,
+    games: [...games.keys()],
     logger,
   });
   const httpServer = createServer(app);
@@ -69,7 +74,7 @@ export function createPartyboxServer(
 
   const rooms = new RoomService({
     store,
-    games: createGameRegistry({ devTools: config.devTools, enableCambio: config.enableCambio }),
+    games,
     defaultGameId: DEFAULT_GAME_ID,
     botTurnFilters,
     maxRooms: config.maxRooms,

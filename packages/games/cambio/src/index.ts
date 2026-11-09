@@ -37,6 +37,7 @@ export const cambioModule: GameModule<
   displayName: theme.title,
   minPlayers: MIN_PLAYERS,
   maxPlayers: MAX_PLAYERS,
+  tutorialSlides: theme.tutorial.slides.length,
   actionSchema,
   optionsSchema,
   defaultOptions,

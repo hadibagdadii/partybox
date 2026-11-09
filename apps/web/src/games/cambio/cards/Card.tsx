@@ -28,6 +28,8 @@ export interface CardProps {
   flipScale?: number;
   className?: string;
   style?: CSSProperties;
+  /** Inside a labelled button: hidden from screen readers so nothing is read twice. */
+  decorative?: boolean;
 }
 
 /** 7% of the width, as an elliptical percentage so corners stay round at 5:7. */
@@ -55,6 +57,7 @@ export const Card = memo(function Card({
   flipScale = 1,
   className,
   style,
+  decorative = false,
 }: CardProps) {
   const width = typeof size === 'number' ? size : cardSizes[size];
   const showFace = face !== null && (faceUp || flip !== null);
@@ -66,8 +69,9 @@ export const Card = memo(function Card({
 
   return (
     <div
-      role="img"
-      aria-label={label}
+      role={decorative ? undefined : 'img'}
+      aria-label={decorative ? undefined : label}
+      aria-hidden={decorative ? 'true' : undefined}
       data-card=""
       data-face-up={faceUp ? '' : undefined}
       className={className}

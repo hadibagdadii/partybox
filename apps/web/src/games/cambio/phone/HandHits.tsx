@@ -1,4 +1,4 @@
-import { theme } from '@partybox/cambio';
+import { theme, type Face } from '@partybox/cambio';
 import type { HoldBindings } from '../../../lib/useHold';
 import { handCols, type PhoneLayout } from '../motion/layout';
 import { CARD_RATIO, colors } from '../tokens';
@@ -27,6 +27,8 @@ export function HandHits({
   selected,
   marked,
   known,
+  faces,
+  locked = false,
 }: {
   layout: PhoneLayout;
   me: string;
@@ -43,6 +45,10 @@ export function HandHits({
   marked: Set<string>;
   /** Cards you remember (rememberPeeks): a small eye badge. */
   known: Set<string>;
+  /** Faces on screen in your hand right now (a peek, or what you remember), by slot id. */
+  faces: Record<string, Face>;
+  /** You called Cambio with lockCaller on. */
+  locked?: boolean;
 }) {
   const { top, bottom } = layout.regions.hand;
   const cols = handCols(slots.map((s) => s.pos));
@@ -76,6 +82,8 @@ export function HandHits({
             selected={selected === s.slotId}
             marked={marked.has(s.slotId)}
             known={known.has(s.slotId)}
+            face={faces[s.slotId] ?? null}
+            locked={locked}
           />
         ))}
     </div>
@@ -93,6 +101,8 @@ function SlotHit({
   selected,
   marked,
   known,
+  face,
+  locked,
 }: {
   slot: HandSlot;
   pose: { x: number; y: number; scale: number };
@@ -104,6 +114,8 @@ function SlotHit({
   selected: boolean;
   marked: boolean;
   known: boolean;
+  face: Face | null;
+  locked: boolean;
 }) {
   const w = pose.scale * sprite;
   const h = w * CARD_RATIO;
@@ -116,7 +128,10 @@ function SlotHit({
     <button
       type="button"
       data-slot={slot.slotId}
-      aria-label={theme.phone.yourCard(slot.pos + 1)}
+      aria-label={theme.phone.cardLabel(theme.phone.yourCard(slot.pos + 1), face, {
+        known,
+        locked,
+      })}
       aria-pressed={selected}
       aria-disabled={!tappable && !onSwipe}
       onClick={(e) => {
@@ -136,8 +151,7 @@ function SlotHit({
     >
       {known && (
         <span
-          aria-label={theme.phone.known}
-          role="img"
+          aria-hidden="true"
           className="absolute right-1 top-1 grid size-6 place-items-center rounded-full"
           style={{
             background: colors.ink,

@@ -1,5 +1,5 @@
 import { theme } from '@partybox/cambio';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { herald, useHeraldState, useVoices } from '../../../lib/herald';
 import { colors } from '../tokens';
@@ -9,12 +9,12 @@ import { cardSounds, useCardSoundState } from './sound';
 /** On the generic TV lobby: one tap turns on narration and card sounds. */
 export function CambioLobbyExtras() {
   const { enabled } = useHeraldState();
-  if (enabled) return <p className="text-3xl text-emerald-300">{theme.tv.heraldReady}</p>;
+  if (enabled) return <p className="text-3xl text-cambio-chalk">{theme.tv.heraldReady}</p>;
   return (
     <button
       type="button"
       onClick={enableCambioHerald}
-      className="rounded-2xl bg-amber-500 px-8 py-3 text-3xl font-semibold text-slate-950 transition-transform duration-150 ease-out active:scale-[0.97]"
+      className="min-h-14 rounded-2xl bg-cambio-glow px-8 py-3 text-3xl font-semibold text-cambio-ink transition-transform duration-150 ease-out active:scale-[0.97]"
     >
       {theme.tv.heraldEnable}
     </button>
@@ -24,7 +24,7 @@ export function CambioLobbyExtras() {
 const rowClass = 'flex min-h-[56px] items-center gap-4';
 const checkClass = 'h-9 w-9 shrink-0 accent-[#c7a047]';
 const buttonBase =
-  'self-start rounded-full px-6 py-2 font-semibold transition-transform duration-150 ease-out active:scale-[0.97]';
+  'focus-visible:outline-cambio-glow self-start rounded-full px-6 py-2 font-semibold transition-transform duration-150 ease-out active:scale-[0.97]';
 
 /** The gear menu: narration and sounds, the narrator's voice, ending the game, a new room. */
 export function CambioSettings({
@@ -36,17 +36,28 @@ export function CambioSettings({
 }) {
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const gear = useRef<HTMLButtonElement>(null);
   const { enabled, muted, voiceURI } = useHeraldState();
   const { muted: soundMuted } = useCardSoundState();
   const voices = useVoices();
   return (
-    <div className="relative font-card">
+    <div
+      className="relative font-card"
+      onKeyDown={(e) => {
+        if (e.key === 'Escape' && open) {
+          setOpen(false);
+          setConfirming(false);
+          gear.current?.focus();
+        }
+      }}
+    >
       <button
+        ref={gear}
         type="button"
         aria-expanded={open}
         aria-label={theme.tv.settings}
         onClick={() => setOpen((o) => !o)}
-        className="grid h-16 w-16 place-items-center rounded-full transition-transform duration-150 ease-out active:scale-[0.97]"
+        className="grid h-16 w-16 place-items-center rounded-full transition-transform focus-visible:outline-cambio-glow duration-150 ease-out active:scale-[0.97]"
         style={{ color: colors.brassLight, boxShadow: `inset 0 0 0 2px rgba(199,160,71,.5)` }}
       >
         <svg viewBox="-12 -12 24 24" width={34} height={34} aria-hidden="true">

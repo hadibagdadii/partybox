@@ -9,6 +9,11 @@ import { useJoinDisplayUrl } from '../lib/config';
 import { joinPath, joinUrl } from '../lib/room-code';
 import { getSocket, useConnected, useOnConnect } from '../lib/socket';
 import { hostSession, type HostSession } from '../lib/storage';
+import { Wordmark } from '../platform/Mark';
+import { partybox } from '../platform/theme';
+import { pbButton } from '../platform/ui';
+
+const h = partybox.host;
 
 export function Host() {
   const socket = getSocket();
@@ -57,21 +62,22 @@ export function Host() {
   if (!session || !view) {
     return (
       <Screen>
-        <h1 className="text-7xl font-bold tracking-tight">Host screen</h1>
+        <Wordmark size="xl" />
+        <h1 className="text-5xl font-extrabold [font-stretch:115%]">{h.title}</h1>
         {session ? (
-          <p className="text-3xl text-slate-400">Reconnecting to {session.code}…</p>
+          <p className="text-3xl text-pb-lavender">{h.reconnectingTo(session.code)}</p>
         ) : (
           <button
             type="button"
             onClick={createRoom}
             disabled={!connected}
-            className="rounded-3xl bg-amber-500 px-12 py-6 text-4xl font-semibold text-slate-950 disabled:opacity-50"
+            className={`${pbButton('primary')} !w-auto !min-h-20 rounded-[24px] px-14 !text-4xl`}
           >
-            Create room
+            {h.create}
           </button>
         )}
-        {error && <p className="text-2xl text-red-400">{error}</p>}
-        {!connected && <p className="text-2xl text-slate-400">Connecting to server…</p>}
+        {error && <ErrorLine>{error}</ErrorLine>}
+        {!connected && <p className="text-2xl text-pb-lavender">{h.connecting}</p>}
       </Screen>
     );
   }
@@ -92,11 +98,7 @@ export function Host() {
     return (
       <>
         <Tutorial room={view.room} game={null} newRoom={forget} />
-        {!connected && (
-          <p className="fixed left-1/2 top-4 z-50 -translate-x-1/2 rounded-full bg-red-900 px-6 py-2 text-xl text-white">
-            Reconnecting…
-          </p>
-        )}
+        {!connected && <Reconnecting />}
       </>
     );
   }
@@ -105,20 +107,14 @@ export function Host() {
     return (
       <>
         <GameHost room={view.room} game={view.game} newRoom={forget} endGame={endGame} />
-        {!connected && (
-          <p className="fixed left-1/2 top-4 z-50 -translate-x-1/2 rounded-full bg-red-900 px-6 py-2 text-xl text-white">
-            Reconnecting…
-          </p>
-        )}
+        {!connected && <Reconnecting />}
       </>
     );
   }
 
   return (
     <Screen>
-      {!connected && (
-        <p className="absolute top-6 rounded-full bg-red-900 px-6 py-2 text-xl">Reconnecting…</p>
-      )}
+      {!connected && <Reconnecting />}
       {!playing || !GameHost ? (
         <Lobby
           room={view.room}
@@ -128,7 +124,7 @@ export function Host() {
         />
       ) : (
         <>
-          <p className="absolute right-8 top-6 text-3xl font-bold tracking-widest text-slate-400">
+          <p className="absolute right-8 top-6 text-3xl font-extrabold tracking-[0.2em] text-pb-lavender">
             {view.room.code}
           </p>
           <WaitingOn room={view.room} ids={view.waitingOn} />
@@ -138,20 +134,43 @@ export function Host() {
       <button
         type="button"
         onClick={forget}
-        className="absolute bottom-6 left-8 text-lg text-slate-400 hover:text-slate-200"
+        className="absolute bottom-6 left-8 min-h-12 rounded-[12px] px-3 text-lg text-pb-lavender underline underline-offset-4 hover:text-pb-paper"
       >
-        New room
+        {h.newRoom}
       </button>
-      {error && <p className="absolute bottom-16 text-2xl text-red-400">{error}</p>}
+      {error && (
+        <div className="absolute bottom-20">
+          <ErrorLine>{error}</ErrorLine>
+        </div>
+      )}
     </Screen>
   );
 }
 
 function Screen({ children }: { children: ReactNode }) {
   return (
-    <main className="relative flex min-h-dvh flex-col items-center justify-center gap-10 bg-slate-950 p-12 text-slate-100">
+    <main className="pb-shell relative flex min-h-dvh flex-col items-center justify-center gap-10 bg-pb-night p-12 font-card text-pb-paper">
       {children}
     </main>
+  );
+}
+
+function Reconnecting() {
+  return (
+    <p
+      role="status"
+      className="fixed left-1/2 top-4 z-50 -translate-x-1/2 rounded-full bg-pb-danger px-6 py-2 font-card text-xl font-semibold text-white"
+    >
+      {h.reconnecting}
+    </p>
+  );
+}
+
+function ErrorLine({ children }: { children: ReactNode }) {
+  return (
+    <p role="alert" className="rounded-2xl bg-pb-danger px-6 py-3 text-2xl text-white">
+      {children}
+    </p>
   );
 }
 
@@ -161,14 +180,14 @@ function WaitingOn({ room, ids }: { room: LobbyView; ids: string[] }) {
   const waiting = room.players.filter((p) => ids.includes(p.id));
   return (
     <div className="flex flex-col items-center gap-2 text-2xl">
-      <p className="text-slate-400">Waiting on</p>
+      <p className="text-pb-lavender">{h.waitingOn}</p>
       <ul className="flex flex-wrap justify-center gap-3">
         {waiting.map((p) => (
-          <li key={p.id} className="rounded-xl bg-slate-800 px-4 py-1">
+          <li key={p.id} className="rounded-xl bg-pb-dusk px-4 py-1">
             {p.name}
             {!p.connected && (
-              <span className="ml-2 rounded bg-red-900 px-2 text-base text-red-100">
-                disconnected
+              <span className="ml-2 rounded bg-pb-danger px-2 text-base text-white">
+                {h.disconnected}
               </span>
             )}
           </li>
@@ -185,23 +204,23 @@ function JoinPanel({ code }: { code: string }) {
   return (
     <div className="flex flex-wrap items-center justify-center gap-16">
       <div className="flex max-w-4xl flex-col items-center gap-6 text-center">
-        <p className="text-3xl text-slate-400">Room code</p>
+        <p className="text-3xl text-pb-lavender">{h.roomCode}</p>
         <p
           aria-label="Room code"
-          className="text-[10rem] font-black leading-none tracking-[0.2em] text-amber-400"
+          className="text-[10rem] font-black leading-none tracking-[0.2em] text-pb-punch [font-stretch:115%]"
         >
           {code}
         </p>
-        <p data-testid="join-fallback" className="text-3xl text-slate-300">
+        <p data-testid="join-fallback" className="text-3xl text-pb-lavender">
           {displayUrl ? (
             <>
-              Or go to <span className="font-semibold text-slate-100">{displayUrl}</span> and enter{' '}
-              <span className="font-semibold text-slate-100">{code}</span>
+              {h.orGoTo} <span className="font-semibold text-pb-paper">{displayUrl}</span>{' '}
+              {h.andEnter} <span className="font-semibold text-pb-paper">{code}</span>
             </>
           ) : (
             <>
-              Or go to{' '}
-              <span className="font-semibold text-slate-100">
+              {h.orGoTo}{' '}
+              <span className="font-semibold text-pb-paper">
                 {/* Long origins wrap before /play, never inside the code. */}
                 {window.location.origin}
                 <wbr />
@@ -215,7 +234,7 @@ function JoinPanel({ code }: { code: string }) {
         <div className="rounded-3xl bg-white p-3 shadow-2xl">
           <JoinQr url={url} className="block h-[min(24rem,40vh)] w-[min(24rem,40vh)]" />
         </div>
-        <figcaption className="text-3xl font-semibold text-slate-200">Scan to join</figcaption>
+        <figcaption className="text-3xl font-semibold text-pb-paper">{h.scan}</figcaption>
       </figure>
     </div>
   );
@@ -270,7 +289,7 @@ function Lobby({
     <>
       <JoinPanel code={room.code} />
       {games.length > 1 && (
-        <div role="radiogroup" aria-label="Game" className="flex gap-3">
+        <div role="radiogroup" aria-label={h.game} className="flex gap-3">
           {games.map((g) => (
             <button
               key={g.id}
@@ -278,50 +297,52 @@ function Lobby({
               role="radio"
               aria-checked={g.id === room.gameId}
               onClick={() => pickGame(g.id)}
-              className={`rounded-xl px-5 py-2 text-2xl ${
-                g.id === room.gameId ? 'bg-amber-500 text-slate-950' : 'bg-slate-800'
+              className={`min-h-14 rounded-2xl px-6 py-2 text-2xl font-bold transition-[transform,background-color] duration-150 ease-out active:scale-[0.97] motion-reduce:transition-none ${
+                g.id === room.gameId ? 'bg-pb-punch text-pb-ink' : 'bg-pb-dusk hover:bg-pb-line'
               }`}
             >
               {g.name}
-              <span className="ml-2 text-lg opacity-70">
+              <span className="ml-2 text-lg font-medium opacity-80">
                 {g.minPlayers}–{g.maxPlayers} players
               </span>
             </button>
           ))}
         </div>
       )}
-      <p className="text-3xl text-slate-400">
-        {room.gameName} · {room.players.length}/{room.maxPlayers} players
-        {missing > 0 ? ` · need ${missing} more` : ' · waiting for the VIP to start'}
+      <p className="text-3xl text-pb-lavender">
+        {room.gameName} · {h.players(room.players.length, room.maxPlayers)} ·{' '}
+        {missing > 0 ? h.needMore(missing) : h.waitingForVip}
       </p>
       {Extras && <Extras />}
       {optionFields && room.options && (
         <OptionsPanel fields={optionFields} values={room.options} onChange={setOptions} />
       )}
-      {botError && <p className="text-xl text-red-400">{botError}</p>}
+      {botError && <ErrorLine>{botError}</ErrorLine>}
       <ul className="flex max-w-6xl flex-wrap justify-center gap-4">
         {room.players.map((p) => (
           <li
             key={p.id}
             className={`flex items-center gap-3 rounded-2xl py-3 pl-6 pr-3 text-3xl ${
-              p.connected ? 'bg-slate-800' : 'bg-slate-900 text-slate-400'
+              p.connected ? 'bg-pb-dusk' : 'bg-pb-night text-pb-lavender ring-1 ring-pb-line'
             }`}
           >
             {p.isVip && (
-              <span role="img" aria-label="VIP">
+              <span role="img" aria-label={partybox.lobby.vip}>
                 👑
               </span>
             )}
             {p.name}
-            {p.isBot && <span className="rounded bg-slate-700 px-2 text-base">bot</span>}
+            {p.isBot && <span className="rounded bg-pb-line px-2 text-base">{h.bot}</span>}
             {!p.connected && (
-              <span className="rounded bg-red-900 px-2 text-base text-red-100">disconnected</span>
+              <span className="rounded bg-pb-danger px-2 text-base text-white">
+                {h.disconnected}
+              </span>
             )}
             <button
               type="button"
-              aria-label={`Remove ${p.name}`}
+              aria-label={h.remove(p.name)}
               onClick={() => setRemoving(p.id)}
-              className="flex h-12 w-12 items-center justify-center rounded-full text-2xl text-slate-300 hover:bg-slate-700"
+              className="flex h-12 w-12 items-center justify-center rounded-full text-2xl text-pb-lavender hover:bg-pb-line"
             >
               <span aria-hidden>×</span>
             </button>
@@ -331,23 +352,23 @@ function Lobby({
       {removing && removingName && (
         <div
           role="alertdialog"
-          aria-label={`Remove ${removingName}?`}
-          className="flex items-center gap-4 rounded-2xl border border-red-800 bg-slate-900 px-6 py-4 text-2xl"
+          aria-label={h.removeConfirm(removingName)}
+          className="flex items-center gap-4 rounded-2xl border border-pb-danger bg-pb-dusk px-6 py-4 text-2xl"
         >
-          <span>Remove {removingName} from the room?</span>
+          <span>{h.removeConfirm(removingName)}</span>
           <button
             type="button"
             onClick={() => remove(removing)}
-            className="rounded-xl bg-red-700 px-5 py-2 font-semibold text-white"
+            className="min-h-12 rounded-xl bg-pb-danger px-5 py-2 font-semibold text-white"
           >
-            Remove
+            {h.removeYes}
           </button>
           <button
             type="button"
             onClick={() => setRemoving(null)}
-            className="rounded-xl border border-slate-500 px-5 py-2"
+            className="min-h-12 rounded-xl border border-pb-line px-5 py-2"
           >
-            Cancel
+            {h.cancel}
           </button>
         </div>
       )}
@@ -356,7 +377,7 @@ function Lobby({
           <button
             type="button"
             onClick={addBot}
-            className="rounded-xl border border-dashed border-slate-600 px-5 py-2 text-xl text-slate-400"
+            className="rounded-xl border border-dashed border-pb-line px-5 py-2 text-xl text-pb-lavender"
           >
             Add bot (dev)
           </button>
@@ -364,7 +385,7 @@ function Lobby({
             type="button"
             onClick={devStart}
             disabled={missing > 0}
-            className="rounded-xl border border-dashed border-slate-600 px-5 py-2 text-xl text-slate-400 disabled:opacity-40"
+            className="rounded-xl border border-dashed border-pb-line px-5 py-2 text-xl text-pb-lavender disabled:opacity-40"
           >
             Start (dev)
           </button>
@@ -372,7 +393,7 @@ function Lobby({
             href={`/dev?code=${room.code}`}
             target="_blank"
             rel="noreferrer"
-            className="text-xl text-slate-400 underline"
+            className="text-xl text-pb-lavender underline"
           >
             Open /dev phones
           </a>

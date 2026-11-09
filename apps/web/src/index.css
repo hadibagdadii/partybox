@@ -8,13 +8,17 @@
     -webkit-text-size-adjust: 100%;
   }
   body {
-    @apply bg-court-night font-sans text-court-parchment antialiased;
+    @apply bg-pb-night font-sans text-pb-paper antialiased;
     overscroll-behavior-y: none;
   }
   /* One visible focus ring for keyboard users everywhere, light enough for the night palette. */
   :focus-visible {
     outline: 3px solid theme('colors.court.goldLight');
     outline-offset: 3px;
+  }
+  /* Partybox's own pages ring focus in their accent. */
+  .pb-shell :focus-visible {
+    outline-color: theme('colors.pb.punch');
   }
   /* No double-tap zoom on anything tappable; pinch zoom still works. */
   a,

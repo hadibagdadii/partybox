@@ -13,6 +13,8 @@ export interface AppOptions {
   allowedOrigin?: string | undefined;
   /** Short join address for the TV to show; sent by /api/config. */
   joinDisplayUrl?: string | undefined;
+  /** Ids of the games this server offers; sent by /api/config for the landing page's list. */
+  games?: readonly string[];
   logger?: Logger;
 }
 
@@ -42,6 +44,7 @@ export function createApp({
   trustProxyHops = 0,
   allowedOrigin,
   joinDisplayUrl,
+  games = [],
   logger = silentLogger,
 }: AppOptions = {}): Express {
   const app = express();
@@ -56,7 +59,7 @@ export function createApp({
   // Read at runtime, so one build serves any deployment.
   app.get('/api/config', (_req, res) => {
     res.set('Cache-Control', 'no-store');
-    res.json({ joinDisplayUrl: joinDisplayUrl ?? null });
+    res.json({ joinDisplayUrl: joinDisplayUrl ?? null, games });
   });
 
   if (webDist && existsSync(webDist)) {

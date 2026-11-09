@@ -6,13 +6,14 @@ import {
   type CambioPlayerView,
   type CambioState,
 } from '@partybox/cambio';
-import { buildFixture } from '@partybox/cambio/fixtures';
+import { buildFixture, FIXTURE_IDS } from '@partybox/cambio/fixtures';
 import { createRng, type LobbyView } from '@partybox/shared';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { ActResult } from '../../registry';
 import { handCols, phoneLayout, posesFor } from '../motion/layout';
 import { sceneFromView } from '../motion/scene';
+import { expectNoNamedLeak, phoneFaces } from '../test/leaks';
 import { CambioPhone, PEEK_SHOW_MS } from './CambioPhone';
 
 const W = 375;
@@ -183,12 +184,14 @@ describe('power targeting', () => {
     rerender(looking);
     const peeked = looking.peeks[0]!;
     const dialog = () => within(screen.getByRole('dialog'));
-    expect(dialog().getByRole('img', { name: theme.cardName(peeked.face) })).toBeTruthy();
+    // The picked card's button names the face only while it shows.
+    const named = new RegExp(`, ${theme.cardName(peeked.face)}(,|$)`);
+    expect(dialog().getByRole('button', { name: named })).toBeTruthy();
     act(() => void vi.advanceTimersByTime(PEEK_SHOW_MS + 10));
-    expect(dialog().queryByRole('img', { name: theme.cardName(peeked.face) })).toBeNull();
+    expect(dialog().queryByRole('button', { name: named })).toBeNull();
     const again = screen.getByRole('button', { name: theme.phone.peekAgain });
     fireEvent.pointerDown(again, { button: 0 });
-    expect(dialog().getByRole('img', { name: theme.cardName(peeked.face) })).toBeTruthy();
+    expect(dialog().getByRole('button', { name: named })).toBeTruthy();
     fireEvent.pointerUp(again);
     fireEvent.click(screen.getByRole('button', { name: theme.actions.donePeek }));
     expect(sent).toHaveBeenLastCalledWith({ type: 'donePeek' });
@@ -394,6 +397,8 @@ describe('the phone never renders a face it may not see', () => {
                 const slot = el.getAttribute('data-slot');
                 expect(v.peeks.some((x) => x.slotId === slot)).toBe(true);
               }
+              // No card name in any text or label, unless this player may see that card.
+              expectNoNamedLeak(document.body, phoneFaces(v), `${p.id} at ${step}`);
               cleanup();
               checks += 1;
             }
@@ -443,6 +448,7 @@ describe('the phone never renders a face it may not see', () => {
       const first = cambioModule.getHostView(s).topDiscard;
       if (first) everPublic.add(first.cardId);
       const phones = new Map<string, HTMLElement>();
+      const namedOk = new Map<string, ReturnType<typeof phoneFaces>>();
       const renders = new Map<string, ReturnType<typeof render>>();
       for (const p of seats) {
         const holder = document.createElement('div');
@@ -479,6 +485,10 @@ describe('the phone never renders a face it may not see', () => {
             expect(m.querySelector('[data-face]')).toBeNull();
             expect(m.getAttribute('data-peeker')).not.toBe(p.id);
           }
+          // A lagging screen may still name a card it was allowed to a moment ago.
+          const named = (namedOk.get(p.id) ?? []).concat(phoneFaces(v));
+          namedOk.set(p.id, named);
+          expectNoNamedLeak(root, named, `${p.id} at ${step}`);
           checks += 1;
         }
         const moves = seats.flatMap((p) =>
@@ -719,5 +729,101 @@ describe('the table on the phone', () => {
     expect(screen.queryByTestId(`lock-${e.playerId}`)).toBeNull();
     rerender(cambioModule.getPlayerView(p.after, 'a'));
     expect(screen.getByTestId(`lock-${e.playerId}`)).toBeTruthy();
+  });
+});
+
+describe('the phone never names a card it may not see', () => {
+  it.each([5, 12])(
+    'through every fixture at %i seats, Rules sheet open and closed',
+    (n) => {
+      for (const id of FIXTURE_IDS) {
+        const f = buildFixture(id, n);
+        const { rerender } = mount(f.before.peeker);
+        let allowed = phoneFaces(f.before.peeker);
+        expectNoNamedLeak(document.body, allowed, `${id} before`);
+        f.steps.forEach((step, i) => {
+          rerender(step.peeker);
+          allowed = allowed.concat(phoneFaces(step.peeker));
+          expectNoNamedLeak(document.body, allowed, `${id} step ${i}`);
+        });
+        // The Rules sheet is rule text only: it names no card at all.
+        fireEvent.click(screen.getByRole('button', { name: theme.rules.open }));
+        expectNoNamedLeak(
+          screen.getByRole('dialog', { name: theme.rules.title }),
+          [],
+          `${id} rules`,
+        );
+        cleanup();
+      }
+    },
+    60_000,
+  );
+
+  it('names your own remembered card in its button, and nobody else’s', () => {
+    const f = buildFixture('peekOwn', 5);
+    const looking = f.steps[0]!.peeker;
+    mount(looking);
+    const peek = looking.peeks[0]!;
+    // While the peek shows, your card's button says what it is.
+    expect(handButton(peek.slotId).getAttribute('aria-label')).toContain(theme.cardName(peek.face));
+    for (const other of mySlots(looking).filter((x) => x.slotId !== peek.slotId)) {
+      expect(handButton(other.slotId).getAttribute('aria-label')).toMatch(/face down/);
+    }
+  });
+});
+
+describe('the Rules chip', () => {
+  /** An absolutely placed element's box, from its inline style, within the phone. */
+  const boxOf = (el: HTMLElement, offsetTop = 0) => ({
+    x: parseFloat(el.style.left),
+    y: parseFloat(el.style.top) + offsetTop,
+    w: parseFloat(el.style.width),
+    h: parseFloat(el.style.height),
+  });
+  const overlaps = (a: ReturnType<typeof boxOf>, b: ReturnType<typeof boxOf>) =>
+    a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+
+  it('sits clear of every hand button, at 4 and 12 seats', () => {
+    for (const n of [4, 12]) {
+      const view = buildFixture('holes', n).steps.at(-1)!.peeker;
+      mount(view);
+      const chip = screen.getByTestId('rules-chip');
+      const c = boxOf(chip);
+      expect(c.w).toBeGreaterThanOrEqual(44);
+      expect(c.h).toBeGreaterThanOrEqual(44);
+      const hand = screen.getByTestId('hand');
+      const top = parseFloat(hand.style.top);
+      const buttons = within(hand).getAllByRole('button');
+      expect(buttons.length).toBeGreaterThanOrEqual(4);
+      for (const b of buttons) expect(overlaps(c, boxOf(b, top))).toBe(false);
+      cleanup();
+    }
+  });
+
+  it('opens the rules, traps focus, and closes on Escape back to the chip', () => {
+    mount(buildFixture('draw', 6).steps[0]!.peeker);
+    const chip = screen.getByRole('button', { name: theme.rules.open });
+    fireEvent.click(chip);
+    const dialog = screen.getByRole('dialog', { name: theme.rules.title });
+    for (const slide of theme.tutorial.slides) {
+      expect(within(dialog).getByText(slide.body)).toBeTruthy();
+    }
+    const close = within(dialog).getByRole('button', { name: theme.rules.close });
+    expect(document.activeElement).toBe(close);
+    // The close button is the only focusable thing: Tab stays on it.
+    fireEvent.keyDown(close, { key: 'Tab' });
+    expect(document.activeElement).toBe(close);
+    fireEvent.keyDown(close, { key: 'Escape' });
+    expect(document.activeElement).toBe(chip);
+    expect(chip.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('closes on a tap outside the sheet', async () => {
+    mount(buildFixture('draw', 6).steps[0]!.peeker);
+    fireEvent.click(screen.getByRole('button', { name: theme.rules.open }));
+    fireEvent.click(screen.getByTestId('rules-backdrop'));
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: theme.rules.title })).toBeNull(),
+    );
   });
 });

@@ -13,11 +13,13 @@ describe('createApp', () => {
   });
 
   it('sends JOIN_DISPLAY_URL from /api/config, or null when unset', async () => {
-    const set = await request(createApp({ joinDisplayUrl: 'partybox.fun' })).get('/api/config');
-    expect(set.body).toEqual({ joinDisplayUrl: 'partybox.fun' });
+    const set = await request(
+      createApp({ joinDisplayUrl: 'partybox.fun', games: ['diwan', 'cambio'] }),
+    ).get('/api/config');
+    expect(set.body).toEqual({ joinDisplayUrl: 'partybox.fun', games: ['diwan', 'cambio'] });
     expect(set.headers['cache-control']).toBe('no-store');
     const unset = await request(createApp()).get('/api/config');
-    expect(unset.body).toEqual({ joinDisplayUrl: null });
+    expect(unset.body).toEqual({ joinDisplayUrl: null, games: [] });
   });
 
   it('answers /api/config ahead of the SPA fallback', async () => {
@@ -26,7 +28,7 @@ describe('createApp', () => {
     const res = await request(createApp({ webDist: dir, joinDisplayUrl: 'x.example' })).get(
       '/api/config',
     );
-    expect(res.body).toEqual({ joinDisplayUrl: 'x.example' });
+    expect(res.body).toEqual({ joinDisplayUrl: 'x.example', games: [] });
   });
 
   it('serves the SPA shell for client routes when webDist is set', async () => {

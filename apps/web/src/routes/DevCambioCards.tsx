@@ -1,12 +1,11 @@
-import { buildFaces, theme, type CambioHostView, type CambioPlayerView } from '@partybox/cambio';
+import { buildFaces, theme } from '@partybox/cambio';
 import { buildFixture, type Fixture, type FixtureId } from '@partybox/cambio/fixtures';
 import { MotionConfig } from 'motion/react';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Card } from '../games/cambio/cards/Card';
 import { CambioTable } from '../games/cambio/motion/CambioTable';
 import { feltBackground } from '../games/cambio/motion/Felt';
-import { privateFaces } from '../games/cambio/motion/scene';
-import { useCambioMotion } from '../games/cambio/motion/useCambioMotion';
+import { useFixtureReplay } from '../games/cambio/motion/useFixtureReplay';
 import type { CardSize } from '../games/cambio/tokens';
 
 /** Gallery buttons: each replays a real engine sequence (or, for flip, the showcase card). */
@@ -29,9 +28,6 @@ const PRIMITIVES: { id: FixtureId | 'flip'; label: string }[] = [
   { id: 'burst', label: 'Burst' },
   { id: 'holes', label: 'Holes and penalties' },
 ];
-
-/** Time between a fixture's broadcasts: bursts arrive like fast bots, peeks hold to be seen. */
-const gapFor = (id: FixtureId) => (id === 'burst' ? 25 : id.startsWith('peek') ? 1400 : 900);
 
 declare global {
   interface Window {
@@ -116,37 +112,16 @@ function Stage({
   reduced: boolean | undefined;
   onBusy: (b: boolean) => void;
 }) {
-  const [host, setHost] = useState<CambioHostView>(fixture.before.host);
-  const [peeker, setPeeker] = useState<CambioPlayerView>(fixture.before.peeker);
-  const opts = { timeScale, reduced };
-  const tv = useCambioMotion(host, opts);
-  const phone = useCambioMotion(peeker, opts);
-
+  const { host, peeker, tv, phone, perspective, done } = useFixtureReplay(fixture, {
+    timeScale,
+    reduced,
+  });
   useEffect(() => {
-    if (!fixture.steps.length) return;
-    onBusy(true);
-    const timers: ReturnType<typeof setTimeout>[] = [];
-    let at = 300 * timeScale;
-    fixture.steps.forEach((s, i) => {
-      timers.push(
-        setTimeout(() => {
-          setHost(s.host);
-          setPeeker(s.peeker);
-          if (i === fixture.steps.length - 1) onBusy(false);
-        }, at),
-      );
-      at += gapFor(fixture.id) * timeScale;
-    });
-    return () => timers.forEach(clearTimeout);
-    // A new fixture remounts the stage; this runs once per replay.
+    if (fixture.steps.length) onBusy(!done);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [done]);
 
   const busy = !tv.playing && tv.backlog === 0 ? '' : 'busy';
-  const perspective = useMemo(
-    () => ({ youId: fixture.peekerId, privateFaces: privateFaces(peeker) }),
-    [fixture.peekerId, peeker],
-  );
   return (
     <div className="flex flex-col gap-4 xl:flex-row" data-motion={busy || 'idle'}>
       <div className="aspect-video w-full overflow-hidden rounded-[22px] shadow-[0_2px_4px_rgba(0,0,0,.3),0_24px_48px_-24px_rgba(0,0,0,.6)] xl:flex-1">

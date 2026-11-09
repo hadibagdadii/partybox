@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 
 interface PublicConfig {
   joinDisplayUrl: string | null;
+  /** Ids of the games the server offers; null until known (or if the server is unreachable). */
+  games: string[] | null;
 }
 
 let cached: Promise<PublicConfig> | null = null;
@@ -13,10 +15,14 @@ function loadConfig(): Promise<PublicConfig> {
     )
     .then((body) => ({
       joinDisplayUrl: typeof body.joinDisplayUrl === 'string' ? body.joinDisplayUrl : null,
+      games:
+        Array.isArray(body.games) && body.games.every((g) => typeof g === 'string')
+          ? body.games
+          : null,
     }))
     .catch(() => {
       cached = null; // Try again next mount.
-      return { joinDisplayUrl: null };
+      return { joinDisplayUrl: null, games: null };
     });
   return cached;
 }
@@ -37,4 +43,17 @@ export function useJoinDisplayUrl(): string | null {
     };
   }, []);
   return url;
+}
+
+/** Game ids the server offers, from /api/config; null until it answers. */
+export function useEnabledGames(): string[] | null {
+  const [games, setGames] = useState<string[] | null>(null);
+  useEffect(() => {
+    let live = true;
+    void loadConfig().then((c) => live && setGames(c.games));
+    return () => {
+      live = false;
+    };
+  }, []);
+  return games;
 }

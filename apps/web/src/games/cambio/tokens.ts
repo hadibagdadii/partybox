@@ -9,7 +9,7 @@ export const colors = {
   feltEdge: '#072219',
   /** Text and chrome on the felt. */
   chalk: '#e9efe9',
-  chalkDim: '#a7bdb1',
+  chalkDim: '#b4c8bd',
   rail: '#2a1d14',
   /** Card stock. */
   stock: '#f6f3ea',
@@ -26,7 +26,7 @@ export const colors = {
   badgeZero: '#1d6b52',
   /** Highlight ring for reduced motion and focus moments. */
   glow: '#f2d27a',
-  danger: '#e0564c',
+  danger: '#c4423a',
 } as const;
 
 export const fonts = {

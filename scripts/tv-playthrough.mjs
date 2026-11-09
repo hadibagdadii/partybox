@@ -6,7 +6,11 @@
  *   # a dev server with bots, e.g. the dev-alt-slow-bots launch config
  *   node scripts/tv-playthrough.mjs [--game cambio|diwan] [--bots 5] [--mode single|match]
  *     [--size 1920x1080] [--slowmo 1] [--url http://localhost:5273] [--out .claude/c5-screenshots]
- *     [--minutes 12] [--headed]
+ *     [--minutes 12] [--headed] [--fps] [--throttle 4]
+ *
+ * --fps samples every animation frame on the real TV for the whole game (under --throttle x CPU
+ * throttling) and reports the average and 5th-percentile fps, overall and while cards move.
+ * Screenshots are skipped in this mode, since capturing one stalls frames.
  *
  * Only for local dev servers: it uses the host's dev buttons (Add bot, Start).
  */
@@ -26,6 +30,19 @@ const [width, height] = arg('size', '1920x1080').split('x').map(Number);
 const slowmo = arg('slowmo', null);
 const minutes = Number(arg('minutes', '12'));
 const headed = process.argv.includes('--headed');
+const fps = process.argv.includes('--fps');
+const throttle = Number(arg('throttle', '4'));
+const FRAME = 1000 / 60;
+
+/** Average fps, 5th-percentile fps (from the 95th-percentile frame time), dropped frames. */
+function frameStats(frames) {
+  if (!frames.length) return { fps: 0, p5: 0, dropped: 0, frames: 0 };
+  const total = frames.reduce((a, b) => a + b, 0);
+  const sorted = [...frames].sort((a, b) => a - b);
+  const p95 = sorted[Math.floor(sorted.length * 0.95)] ?? sorted.at(-1);
+  const dropped = frames.reduce((n, dt) => n + Math.max(0, Math.round(dt / FRAME) - 1), 0);
+  return { fps: (frames.length * 1000) / total, p5: 1000 / p95, dropped, frames: frames.length };
+}
 const tag = `${game}-${bots}bots-${mode}-${width}x${height}`;
 const out = join(arg('out', '.claude/c5-screenshots'), game === 'diwan' ? 'diwan' : '');
 const chrome =
@@ -48,10 +65,8 @@ try {
     if (m.text().startsWith('Failed to load resource')) return;
     errors.push(`console: ${m.text().slice(0, 400)}`);
   });
-  // The dev server has no favicon (a known, harmless 404 on every page).
   tv.on('response', (r) => {
-    if (r.status() >= 400 && !r.url().endsWith('/favicon.ico'))
-      errors.push(`http ${r.status()}: ${r.url()}`);
+    if (r.status() >= 400) errors.push(`http ${r.status()}: ${r.url()}`);
   });
   await tv.goto(`${base}/host${slowmo ? `?slowmo=${slowmo}` : ''}`, { waitUntil: 'networkidle0' });
 
@@ -85,7 +100,27 @@ try {
   await clickText('Start');
   await sleep(1500);
 
+  if (fps) {
+    const cdp = await tv.createCDPSession();
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: throttle });
+    await tv.evaluate(() => {
+      const w = /** @type {any} */ (window);
+      w.__tvFrames = { all: [], moving: [] };
+      let last = performance.now();
+      const loop = (t) => {
+        const dt = t - last;
+        last = t;
+        w.__tvFrames.all.push(dt);
+        const step = document.querySelector('[data-testid=cambio-tv]')?.getAttribute('data-step');
+        if (step && step !== 'idle') w.__tvFrames.moving.push(dt);
+        requestAnimationFrame(loop);
+      };
+      requestAnimationFrame(loop);
+    });
+  }
+
   const shot = async (name, force = false) => {
+    if (fps) return;
     if (shots.has(name) && !force) return;
     shots.add(name);
     const file = join(out, `${tag}-${name}.png`);
@@ -156,7 +191,16 @@ try {
     }
   }
   if (!overAt) errors.push(`no game over within ${minutes} minutes`);
-  log('screenshots:', [...shots].join(', '));
+  if (fps) {
+    const f = await tv.evaluate(() => /** @type {any} */ (window).__tvFrames);
+    const fmt = (label, st) =>
+      `${label}: avg ${st.fps.toFixed(1)} fps · p5 ${st.p5.toFixed(1)} fps · ${st.dropped} dropped of ${st.frames} frames`;
+    log(
+      `Chrome ${await browser.version()} · ${headed ? 'headed' : 'headless'} · CPU throttle ${throttle}x · ${width}x${height}`,
+    );
+    log(fmt('whole game', frameStats(f.all)));
+    log(fmt('while cards move', frameStats(f.moving)));
+  } else log('screenshots:', [...shots].join(', '));
 } finally {
   await browser.close();
 }

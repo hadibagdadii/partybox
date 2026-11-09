@@ -271,6 +271,18 @@ describe('RoomService tutorial', () => {
     expect(rooms.hostView(code)?.room).toMatchObject({ phase: 'playing', tutorial: null });
   });
 
+  it('runs Cambio’s six slides and starts the game from the last', () => {
+    const { rooms, code } = setup('cambio');
+    const vip = ok(rooms.join(code, 'Amina'));
+    ok(rooms.addBot(code));
+    ok(rooms.startTutorial(code, vip.playerId));
+    expect(rooms.hostView(code)?.room.tutorial).toEqual({ slide: 0, total: 6 });
+    for (let i = 0; i < 5; i++) ok(rooms.stepTutorial(code, vip.playerId, 'next'));
+    expect(rooms.hostView(code)?.room).toMatchObject({ phase: 'lobby', tutorial: { slide: 5 } });
+    ok(rooms.stepTutorial(code, vip.playerId, 'next'));
+    expect(rooms.hostView(code)?.room).toMatchObject({ phase: 'playing', tutorial: null });
+  });
+
   it('is unavailable for games without one', () => {
     const { rooms, code } = setup('tap-race');
     const vip = ok(rooms.join(code, 'Amina'));

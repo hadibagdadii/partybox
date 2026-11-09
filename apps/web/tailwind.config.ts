@@ -1,12 +1,22 @@
 import type { Config } from 'tailwindcss';
 import { colors as cambioColors, fonts as cambioFonts } from './src/games/cambio/tokens';
 import { colors, fonts, motion, radii, shadows, spacing, tvType } from './src/games/diwan/tokens';
+import { colors as pbColors } from './src/platform/tokens';
+
+// The confetti list is decoration for the mark, not a utility color.
+const pbSolid = Object.fromEntries(
+  Object.entries(pbColors).filter(([k]) => k !== 'confetti'),
+) as Record<string, string>;
 
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
     extend: {
-      colors: { court: colors, cambio: cambioColors },
+      colors: {
+        court: colors,
+        cambio: cambioColors,
+        pb: pbSolid,
+      },
       fontFamily: {
         display: [...fonts.display],
         serif: [...fonts.serif],

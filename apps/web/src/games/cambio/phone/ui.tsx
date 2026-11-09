@@ -22,7 +22,7 @@ export function Btn({
   return (
     <button
       type="button"
-      className={`${tones[tone]} ${big ? 'min-h-14 text-xl' : 'min-h-12 text-base'} no-callout select-none rounded-[14px] px-4 font-card font-semibold tracking-[-0.01em] transition-[transform,opacity] duration-150 ease-out active:scale-[0.97] disabled:opacity-40 motion-reduce:transition-none ${className}`}
+      className={`${tones[tone]} ${big ? 'min-h-14 text-xl' : 'min-h-12 text-base'} no-callout select-none rounded-[14px] px-4 focus-visible:outline-cambio-glow font-card font-semibold tracking-[-0.01em] transition-[transform,opacity] duration-150 ease-out active:scale-[0.97] disabled:opacity-40 motion-reduce:transition-none ${className}`}
       {...rest}
     >
       {children}

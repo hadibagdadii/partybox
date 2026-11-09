@@ -18,6 +18,7 @@ afterEach(async () => {
 async function startProd(extra: Record<string, string> = {}) {
   const webDist = mkdtempSync(path.join(tmpdir(), 'partybox-web-'));
   writeFileSync(path.join(webDist, 'index.html'), '<div id="root"></div>');
+  writeFileSync(path.join(webDist, 'favicon.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>');
   const { config } = loadConfig({
     NODE_ENV: 'production',
     BOT_MIN_DELAY_MS: '0',
@@ -30,6 +31,23 @@ async function startProd(extra: Record<string, string> = {}) {
 }
 
 describe('production server', () => {
+  it('lists Cambio on the landing page only once ENABLE_CAMBIO turns it on', async () => {
+    const off = await startProd();
+    expect(await (await fetch(`${off.url}/api/config`)).json()).toMatchObject({ games: ['diwan'] });
+    await off.close();
+    const on = await startProd({ ENABLE_CAMBIO: 'true' });
+    expect(await (await fetch(`${on.url}/api/config`)).json()).toMatchObject({
+      games: ['diwan', 'cambio'],
+    });
+  });
+
+  it('serves the favicon as an SVG, not the SPA shell', async () => {
+    const s = await startProd();
+    const res = await fetch(`${s.url}/favicon.svg`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('image/svg+xml');
+  });
+
   it('turns off bots, dev events, and Tap Race', async () => {
     const s = await startProd();
     const tv = await s.client();

@@ -1,12 +1,14 @@
 import { PLAYER_NAME_MAX, type PlayerViewMessage } from '@partybox/shared';
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { LatticeBackground, Rosette12 } from '../games/diwan/ornaments';
 import { gameScreens, type ActOptions, type ActResult } from '../games/registry';
 import { getSocket, useConnected, useOnConnect } from '../lib/socket';
 import { cleanCode, isFullCode } from '../lib/room-code';
 import { lastName, parseSlot, playerToken, playerTokenKey } from '../lib/storage';
 import { useWakeLock } from '../lib/wake-lock';
+import { Mark } from '../platform/Mark';
+import { partybox } from '../platform/theme';
+import { pbButton, pbInput, PbPage } from '../platform/ui';
 
 interface SeatRef {
   code: string;
@@ -22,7 +24,8 @@ type SeatCommand =
   | 'tutorial:skip'
   | 'room:leave';
 
-const REMOVED_MESSAGE = 'You were removed from the room';
+const t = partybox.join;
+const l = partybox.lobby;
 
 export function Play() {
   const socket = getSocket();
@@ -136,7 +139,8 @@ export function Play() {
     const ownsViewport =
       !!view &&
       !debug &&
-      ((view.room.phase === 'lobby' && !!screens?.Lobby) ||
+      ((view.room.phase === 'lobby' &&
+        (!!screens?.Lobby || (!!view.room.tutorial && !!screens?.Tutorial))) ||
         (view.room.phase !== 'lobby' && !!screens?.fullScreen));
     const seated = view && (
       <Seated
@@ -150,16 +154,16 @@ export function Play() {
     );
     return (
       <>
-        {!connected && <Banner>Reconnecting…</Banner>}
+        {!connected && <Banner>{t.reconnecting}</Banner>}
         {error && ownsViewport && <Toast>{error}</Toast>}
         {ownsViewport ? (
           seated
         ) : (
           <Screen>
             {seated ?? (
-              <p className="text-center text-xl text-court-mist">Rejoining {seat.code}…</p>
+              <p className="text-center text-xl text-pb-lavender">{t.rejoining(seat.code)}</p>
             )}
-            {error && <p className="text-center text-lg text-red-400">{error}</p>}
+            {error && <ErrorText>{error}</ErrorText>}
           </Screen>
         )}
       </>
@@ -169,9 +173,12 @@ export function Play() {
   if (removed) {
     return (
       <Screen>
-        <Rosette12 size={96} className="mx-auto text-court-gold" />
-        <p role="status" className="text-center font-display text-4xl text-court-goldLight">
-          {REMOVED_MESSAGE}
+        <Mark size={72} className="mx-auto" />
+        <p
+          role="status"
+          className="text-center text-3xl font-extrabold [font-stretch:110%] [text-wrap:balance]"
+        >
+          {t.removed}
         </p>
         <BigButton
           onClick={() => {
@@ -179,10 +186,13 @@ export function Play() {
             setParams(slot ? { slot } : {}, { replace: true });
           }}
         >
-          Join a game
+          {t.joinAnother}
         </BigButton>
-        <Link to="/about" className="text-center text-lg text-court-mist underline">
-          About
+        <Link
+          to="/about"
+          className="min-h-12 self-center py-3 text-lg text-pb-lavender underline underline-offset-4"
+        >
+          {t.about}
         </Link>
       </Screen>
     );
@@ -191,12 +201,14 @@ export function Play() {
   const canJoin = isFullCode(code) && name.trim().length > 0 && connected && !busy;
   return (
     <Screen>
-      <Rosette12 size={96} className="mx-auto text-court-gold motion-safe:animate-spin-slow" />
-      <h1 className="text-center font-display text-5xl text-court-goldLight">Join a game</h1>
+      <Link to="/" aria-label={partybox.name} className="mx-auto rounded-full">
+        <Mark size={72} />
+      </Link>
+      <h1 className="text-center text-4xl font-extrabold [font-stretch:115%]">{t.title}</h1>
       <form onSubmit={join} className="flex flex-col gap-4">
         {editingCode ? (
           <label className="flex flex-col gap-2">
-            <span className="text-lg text-court-mist">Room code</span>
+            <span className="text-lg text-pb-lavender">{t.code}</span>
             <input
               value={code}
               onChange={(e) => setCode(cleanCode(e.target.value))}
@@ -206,50 +218,47 @@ export function Play() {
               spellCheck={false}
               inputMode="text"
               placeholder="BCDF"
-              className="min-h-16 w-full min-w-0 rounded-button border border-court-gold/40 bg-court-dusk px-4 text-center text-4xl font-bold uppercase tracking-[0.4em] text-court-parchment placeholder:text-court-mist focus:border-court-goldLight focus:outline-none focus:ring-2 focus:ring-court-goldLight"
+              className={`${pbInput} min-h-16 bg-pb-dusk text-center text-4xl font-extrabold uppercase tracking-[0.4em]`}
             />
           </label>
         ) : (
-          <p className="flex min-h-12 items-center justify-center gap-3 text-xl text-court-mist">
+          <p className="flex min-h-12 items-center justify-center gap-3 text-xl text-pb-lavender">
             <span>
-              Room{' '}
-              <span
-                aria-label="Room code"
-                className="font-bold tracking-[0.3em] text-court-parchment"
-              >
+              {t.room}{' '}
+              <span aria-label={t.code} className="font-extrabold tracking-[0.3em] text-pb-paper">
                 {code}
               </span>
             </span>
             <button
               type="button"
               onClick={() => setEditingCode(true)}
-              className="min-h-12 px-2 text-lg text-court-goldLight underline"
+              className="min-h-12 rounded-[12px] px-2 text-lg text-pb-punch underline underline-offset-4"
             >
-              Change
+              {t.change}
             </button>
           </p>
         )}
         <label className="flex flex-col gap-2">
-          <span className="text-lg text-court-mist">Your name</span>
+          <span className="text-lg text-pb-lavender">{t.name}</span>
           <input
             value={name}
             onChange={(e) => setName(e.target.value.slice(0, PLAYER_NAME_MAX))}
             maxLength={PLAYER_NAME_MAX}
             autoComplete="nickname"
             autoFocus={!editingCode}
-            className="min-h-16 w-full min-w-0 rounded-button border border-court-gold/40 bg-court-dusk px-4 text-2xl text-court-parchment focus:border-court-goldLight focus:outline-none focus:ring-2 focus:ring-court-goldLight"
+            className={`${pbInput} min-h-16 bg-pb-dusk text-2xl`}
           />
         </label>
         <button
           type="submit"
           disabled={!canJoin}
-          className="min-h-16 w-full rounded-button bg-gradient-to-b from-court-goldLight to-court-gold px-6 text-2xl font-semibold text-court-ink shadow-glow disabled:opacity-50"
+          className={`${pbButton('primary')} min-h-16 text-2xl`}
         >
-          {busy ? 'Joining…' : 'Join'}
+          {busy ? t.joining : t.join}
         </button>
       </form>
-      {error && <p className="text-center text-lg text-red-400">{error}</p>}
-      {!connected && <p className="text-center text-court-mist">Connecting to server…</p>}
+      {error && <ErrorText>{error}</ErrorText>}
+      {!connected && <p className="text-center text-pb-lavender">{t.connecting}</p>}
     </Screen>
   );
 }
@@ -283,8 +292,12 @@ function Seated({
       <>
         <Header view={view} />
         <GamePlayer {...props} />
-        {playAgain && <BigButton onClick={playAgain}>Play again</BigButton>}
-        {reset && <BigButton onClick={reset}>Back to lobby</BigButton>}
+        {playAgain && <BigButton onClick={playAgain}>{l.playAgain}</BigButton>}
+        {reset && (
+          <BigButton tone="quiet" onClick={reset}>
+            {l.backToLobby}
+          </BigButton>
+        )}
       </>
     );
   }
@@ -309,27 +322,33 @@ function Seated({
   }
 
   const missing = room.minPlayers - room.players.length;
+  const tutorial = screens?.Tutorial ? () => send('tutorial:start') : null;
   return (
     <>
       <Header view={view} />
-      <h1 className="text-center font-display text-4xl text-court-goldLight">You're in!</h1>
-      <p className="text-center text-xl text-court-mist">
-        {room.players.length} player{room.players.length === 1 ? '' : 's'} joined
-        {missing > 0 && ` · need ${missing} more`}
+      <h1 className="text-center text-4xl font-extrabold [font-stretch:115%]">{l.youreIn}</h1>
+      <p className="text-center text-xl text-pb-lavender">
+        {room.gameName} · {l.joined(room.players.length)}
+        {missing > 0 && ` · ${l.needMore(missing)}`}
       </p>
       {view.canStart ? (
-        <BigButton onClick={() => send('game:start')}>Start game</BigButton>
+        <div className="flex flex-col gap-3">
+          {tutorial && <BigButton onClick={tutorial}>{l.startWithTutorial}</BigButton>}
+          <BigButton tone={tutorial ? 'secondary' : 'primary'} onClick={() => send('game:start')}>
+            {tutorial ? l.startNow : l.start}
+          </BigButton>
+        </div>
       ) : (
-        <p className="text-center text-xl text-court-mist">
-          {you.isVip ? 'Waiting for more players…' : 'Waiting for the VIP to start…'}
+        <p className="text-center text-xl text-pb-lavender">
+          {you.isVip ? l.waitingForMore : l.waitingForVip}
         </p>
       )}
       <button
         type="button"
         onClick={() => send('room:leave')}
-        className="min-h-12 text-center text-lg text-court-mist underline"
+        className="min-h-12 self-center rounded-[12px] px-3 text-center text-lg text-pb-lavender underline underline-offset-4"
       >
-        Leave room
+        {l.leave}
       </button>
     </>
   );
@@ -337,21 +356,36 @@ function Seated({
 
 function Header({ view }: { view: PlayerViewMessage }) {
   return (
-    <p className="text-center text-lg text-court-mist">
-      {view.you.isVip && '👑 '}
-      {view.you.name} · {view.room.code}
+    <p className="flex items-center justify-center gap-2 text-center text-lg text-pb-lavender">
+      {view.you.isVip && (
+        <span className="rounded-full bg-pb-punch px-2 py-0.5 text-sm font-bold text-pb-ink">
+          {l.vip}
+        </span>
+      )}
+      {view.you.name} ·{' '}
+      <span className="font-bold tracking-[0.2em] text-pb-paper">{view.room.code}</span>
     </p>
   );
 }
 
 function Screen({ children }: { children: ReactNode }) {
   return (
-    <div className="relative min-h-dvh overflow-hidden">
-      <LatticeBackground className="opacity-[0.07]" />
-      <main className="relative mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-6 px-safe pb-safe pt-safe text-court-parchment">
+    <PbPage>
+      <main className="mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-6 px-safe pb-safe pt-safe">
         {children}
       </main>
-    </div>
+    </PbPage>
+  );
+}
+
+function ErrorText({ children }: { children: ReactNode }) {
+  return (
+    <p
+      role="alert"
+      className="rounded-[14px] bg-pb-danger px-4 py-3 text-center text-lg text-white"
+    >
+      {children}
+    </p>
   );
 }
 
@@ -360,7 +394,7 @@ function Banner({ children }: { children: ReactNode }) {
   return (
     <p
       role="status"
-      className="fixed inset-x-0 top-0 z-[200] bg-court-danger px-4 pb-1.5 pt-[max(env(safe-area-inset-top),0.375rem)] text-center text-sm font-semibold text-white shadow-lift"
+      className="fixed inset-x-0 top-0 z-[200] bg-pb-danger px-4 pb-1.5 pt-[max(env(safe-area-inset-top),0.375rem)] text-center font-card text-sm font-semibold text-white shadow-lg"
     >
       {children}
     </p>
@@ -371,20 +405,24 @@ function Toast({ children }: { children: ReactNode }) {
   return (
     <p
       role="alert"
-      className="pointer-events-none fixed inset-x-4 top-[calc(max(env(safe-area-inset-top),0.75rem)+4rem)] z-[200] mx-auto max-w-md rounded-button bg-court-danger px-4 py-3 text-center text-lg text-white shadow-lift"
+      className="pointer-events-none fixed inset-x-4 top-[calc(max(env(safe-area-inset-top),0.75rem)+4rem)] z-[200] mx-auto max-w-md rounded-[16px] bg-pb-danger px-4 py-3 text-center font-card text-lg text-white shadow-lg"
     >
       {children}
     </p>
   );
 }
 
-function BigButton({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+function BigButton({
+  onClick,
+  children,
+  tone = 'primary',
+}: {
+  onClick: () => void;
+  children: ReactNode;
+  tone?: 'primary' | 'secondary' | 'quiet';
+}) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="min-h-16 w-full rounded-button bg-gradient-to-b from-court-goldLight to-court-gold px-6 text-2xl font-semibold text-court-ink shadow-glow"
-    >
+    <button type="button" onClick={onClick} className={`${pbButton(tone)} min-h-16 text-2xl`}>
       {children}
     </button>
   );

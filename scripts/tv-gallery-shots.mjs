@@ -62,8 +62,7 @@ try {
       errors.push(`console: ${m.text().slice(0, 300)}`);
   });
   page.on('response', (r) => {
-    if (r.status() >= 400 && !r.url().endsWith('/favicon.ico'))
-      errors.push(`http ${r.status()}: ${r.url()}`);
+    if (r.status() >= 400) errors.push(`http ${r.status()}: ${r.url()}`);
   });
   await page.goto(`${base}/dev/cambio-host`, { waitUntil: 'networkidle0' });
   await page.waitForSelector('main section a', { timeout: 15_000 });

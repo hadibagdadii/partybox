@@ -1,4 +1,5 @@
 import type { HostViewMessage, LobbyView, PlayerViewMessage } from '@partybox/shared';
+import { theme as cambio } from '@partybox/cambio';
 import { theme } from '@partybox/diwan';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -8,6 +9,7 @@ import { fixtureRoom, scenes } from './games/diwan/tv/fixtures';
 import { resetConfigCache } from './lib/config';
 import { getSocket } from './lib/socket';
 import { parseSlot, playerTokenKey } from './lib/storage';
+import { partybox } from './platform/theme';
 import { decodeQrSvg } from './test/decode-qr';
 
 // Pages talk to the server through this module; keep tests offline.
@@ -30,24 +32,46 @@ function renderAt(path: string) {
 afterEach(cleanup);
 
 describe('AppRoutes', () => {
-  it('renders the landing page at /', () => {
+  it('renders the Partybox landing page at /, listing Diwan before the server answers', () => {
     renderAt('/');
-    expect(screen.getByRole('heading', { name: theme.landing.title })).toBeTruthy();
-    expect(screen.getByText(theme.landing.pitch)).toBeTruthy();
-    expect(screen.getByText(theme.landing.players)).toBe(screen.getByText('5 to 10 players'));
-    expect(screen.getAllByRole('listitem')).toHaveLength(3);
+    expect(screen.getByRole('heading', { level: 1, name: partybox.name })).toBeTruthy();
+    expect(screen.getByText(partybox.landing.pitch)).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Diwan' })).toBeTruthy();
+    expect(screen.getByText(theme.pitch)).toBeTruthy();
+    expect(screen.getByText('5 to 10 players')).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Cambio' })).toBeNull();
+  });
+
+  it('lists every game the server offers, each with players and a pitch', async () => {
+    resetConfigCache();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({ joinDisplayUrl: null, games: ['diwan', 'cambio'] }),
+      })),
+    );
+    renderAt('/');
+    expect(await screen.findByRole('heading', { name: 'Cambio' })).toBeTruthy();
+    expect(screen.getByText(cambio.tagline)).toBeTruthy();
+    expect(screen.getByText('2 to 12 players')).toBeTruthy();
+    expect(document.querySelectorAll('[data-game]')).toHaveLength(2);
+    vi.unstubAllGlobals();
+    resetConfigCache();
   });
 
   it('sends hosts from the landing page to /host', () => {
     renderAt('/');
-    fireEvent.click(screen.getByRole('link', { name: theme.landing.host }));
+    fireEvent.click(screen.getByRole('link', { name: partybox.landing.host }));
     expect(screen.getByRole('heading', { name: 'Host screen' })).toBeTruthy();
   });
 
   it('joins from the landing page with the typed code', () => {
     renderAt('/');
     const input = screen.getByLabelText<HTMLInputElement>('Room code');
-    const join = screen.getByRole<HTMLButtonElement>('button', { name: theme.landing.joinButton });
+    const join = screen.getByRole<HTMLButtonElement>('button', {
+      name: partybox.landing.joinButton,
+    });
     fireEvent.change(input, { target: { value: 'bc' } });
     expect(join.disabled).toBe(true);
     fireEvent.change(input, { target: { value: 'bc-df9' } });
@@ -84,19 +108,22 @@ describe('AppRoutes', () => {
 
   it('links to About from the landing page', () => {
     renderAt('/');
-    fireEvent.click(screen.getByRole('link', { name: 'About' }));
+    fireEvent.click(screen.getByRole('link', { name: partybox.landing.about }));
     expect(screen.getByText(theme.about.attribution)).toBeTruthy();
   });
 
-  it('shows the attribution and license at /about, and Back goes home with no history', () => {
+  it('shows Diwan’s attribution and license and Cambio’s origin at /about; Back goes home', () => {
     renderAt('/about');
-    expect(screen.getByRole('heading', { name: theme.about.title })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: partybox.about.title })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Diwan' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: cambio.about.title })).toBeTruthy();
+    expect(screen.getByText(cambio.about.body)).toBeTruthy();
     expect(screen.getByText(theme.about.attribution)).toBeTruthy();
     const link = screen.getByRole('link', { name: theme.about.licenseLink });
     expect(link.getAttribute('href')).toBe(theme.about.licenseUrl);
     expect(screen.getByText(theme.about.licenseFile)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: theme.about.back }));
-    expect(screen.getByRole('heading', { name: theme.landing.title })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: partybox.about.back }));
+    expect(screen.getByText(partybox.landing.pitch)).toBeTruthy();
   });
 
   it('renders one iframe per slot at /dev', () => {
@@ -277,6 +304,55 @@ describe('removed phone', () => {
     act(() => handler('player:removed')());
     expect(screen.getByRole('status').textContent).toBe('You were removed from the room');
     expect(saved.has('partybox:BCDF')).toBe(false);
+  });
+});
+
+describe('generic phone lobby', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('offers the VIP the Cambio tutorial before starting', () => {
+    const saved = new Map([['partybox:BCDF', '00000000-0000-4000-8000-000000000000']]);
+    vi.stubGlobal('localStorage', {
+      getItem: (k: string) => saved.get(k) ?? null,
+      setItem: (k: string, v: string) => saved.set(k, v),
+      removeItem: (k: string) => saved.delete(k),
+    });
+    renderAt('/play?code=BCDF');
+    const socket = getSocket();
+    const handler = vi
+      .mocked(socket.on)
+      .mock.calls.filter(([e]) => e === 'player:view')
+      .at(-1)?.[1] as (v: PlayerViewMessage) => void;
+    const view: PlayerViewMessage = {
+      room: {
+        ...fixtureRoom(scenes.nominate.view),
+        phase: 'lobby',
+        code: 'BCDF',
+        gameId: 'cambio',
+        gameName: 'Cambio',
+      },
+      you: { id: 'p1', name: 'Amina', isVip: true },
+      canStart: true,
+      game: null,
+    };
+    act(() => handler(view));
+    vi.mocked(socket.emit).mockClear();
+    fireEvent.click(screen.getByRole('button', { name: partybox.lobby.startWithTutorial }));
+    expect(vi.mocked(socket.emit).mock.calls[0]?.[0]).toBe('tutorial:start');
+    fireEvent.click(screen.getByRole('button', { name: partybox.lobby.startNow }));
+    expect(vi.mocked(socket.emit).mock.calls[1]?.[0]).toBe('game:start');
+
+    // Once the tutorial runs, Cambio's own screen owns the whole phone.
+    act(() =>
+      handler({
+        ...view,
+        you: { ...view.you, isVip: false },
+        room: { ...view.room, tutorial: { slide: 1, total: cambio.tutorial.slides.length } },
+      }),
+    );
+    expect(screen.getByRole('heading', { name: cambio.tutorial.watchTv })).toBeTruthy();
+    expect(screen.queryByText(partybox.lobby.youreIn)).toBeNull();
+    expect(document.querySelector('.pb-shell')).toBeNull();
   });
 });
 

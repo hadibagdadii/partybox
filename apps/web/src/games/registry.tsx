@@ -6,6 +6,8 @@ import { CambioPhone } from './cambio/phone/CambioPhone';
 import { cambioOptionFields } from './cambio/options';
 import { CambioLobbyExtras } from './cambio/tv/CambioSettings';
 import { CambioTv } from './cambio/tv/CambioTv';
+import { CambioTutorialTv } from './cambio/tutorial/lazy';
+import { TutorialPhone as CambioTutorialPhone } from './cambio/tutorial/TutorialPhone';
 import { DiwanDebugPlayer } from './diwan/DiwanDebugPlayer';
 import { DiwanDebugHost } from './diwan/DiwanDebugHost';
 import { DiwanLobby } from './diwan/phone/screens/DiwanLobby';
@@ -112,6 +114,8 @@ export const gameScreens: Record<string, GameScreens> = {
     fullScreen: true,
     Debug: CambioDebugPlayer,
     options: cambioOptionFields,
+    HostTutorial: CambioTutorialTv,
+    Tutorial: CambioTutorialPhone,
   },
   'tap-race': { Host: TapRaceHost, Player: TapRacePlayer },
 };

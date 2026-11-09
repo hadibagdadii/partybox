@@ -54,6 +54,20 @@ describe('theme', () => {
     for (const m of SCORING_MODES) expect(theme.scoringModes[m].name).toBeTruthy();
   });
 
+  it('labels card buttons for screen readers', () => {
+    const seven = { rank: '7', suit: 'hearts' } as const;
+    expect(theme.phone.cardLabel(theme.phone.yourCard(3), null)).toBe('Your card 3, face down');
+    expect(theme.phone.cardLabel(theme.phone.yourCard(3), seven, { known: true })).toBe(
+      'Your card 3, Seven of Hearts, you know it',
+    );
+    expect(
+      theme.phone.cardLabel(theme.phone.theirCard('Yusuf', 2), null, {
+        selected: true,
+        locked: true,
+      }),
+    ).toBe("Yusuf's card 2, face down, selected, locked");
+  });
+
   it('names cards', () => {
     expect(theme.cardName({ rank: 'Q', suit: 'hearts' })).toBe('Queen of Hearts');
     expect(theme.cardName({ rank: 'joker', suit: null })).toBe('Joker');
@@ -74,7 +88,8 @@ describe('theme', () => {
 
   it('has phone copy, with counts and names filled in', () => {
     for (const [key, v] of Object.entries(theme.phone)) {
-      const text = typeof v === 'function' ? (v as (...a: unknown[]) => string)('Amina', 2) : v;
+      const args = key === 'cardLabel' ? ['Amina', null] : ['Amina', 2];
+      const text = typeof v === 'function' ? (v as (...a: unknown[]) => string)(...args) : v;
       expect(text, key).toBeTruthy();
     }
     expect(theme.phone.cardCount(1)).toBe('1 card');
@@ -151,5 +166,24 @@ describe('strings that take a name read right when the name is You', () => {
     expect(theme.phone.turnOf('Bot 1')).toBe("Bot 1's turn");
     expect(theme.phone.peekedBy('Bot 1')).toBe('Bot 1 looked at this');
     expect(theme.phone.miniHand('Bot 1', 4, true)).toBe('Bot 1, 4 cards, their turn');
+  });
+
+  it('has six tutorial slides, each with a title, body, and narrator line', () => {
+    expect(theme.tutorial.slides).toHaveLength(6);
+    for (const slide of theme.tutorial.slides) {
+      expect(slide.title && slide.body && slide.herald).toBeTruthy();
+    }
+  });
+
+  it('names every power on the powers slide', () => {
+    const powers = theme.tutorial.slides.find((s) => s.title === 'Powers')!;
+    for (const p of POWER_IDS) expect(powers.body).toContain(theme.powers[p].name);
+  });
+
+  it('never names a specific card in rule text', () => {
+    // Card names ("Seven of Hearts") are reserved for faces a viewer may see; the face-leak
+    // tests rely on rule text never containing one.
+    const text = theme.tutorial.slides.map((s) => `${s.title} ${s.body} ${s.herald}`).join(' ');
+    for (const s of SUITS) expect(text).not.toContain(`of ${theme.suits[s].name}`);
   });
 });
