@@ -1,5 +1,6 @@
 import type { CambioEvent, Face } from '@partybox/cambio';
 import { timing } from '../tokens';
+import { cardStaggerFor, revealOrder } from './reveal';
 import { DISCARD_KEEP, type Scene } from './scene';
 
 export type StepKind =
@@ -106,12 +107,21 @@ function flipInFlight(card: { cardId: string; face: Face }, move: CardMove): Car
 export const dealStagger = (cards: number): number =>
   Math.min(timing.dealStaggerMax, timing.dealSpread / Math.max(cards, 1));
 
+export interface StepOptions {
+  /** Time between hands turning over at the round's end; the TV takes it slower. */
+  revealStagger?: number;
+}
+
 /**
  * Applies one public event to the scene and describes how to animate it. Pure: the same scene
  * and event always give the same step. Unknown slots or cards (a scene that drifted) are skipped
  * rather than thrown on; the queue settles to the real state afterwards.
  */
-export function applyEvent(prev: Scene, event: CambioEvent): { scene: Scene; step: Step } {
+export function applyEvent(
+  prev: Scene,
+  event: CambioEvent,
+  opts: StepOptions = {},
+): { scene: Scene; step: Step } {
   const s = clone(prev);
   const step: Step = {
     kind: 'quiet',
@@ -147,6 +157,7 @@ export function applyEvent(prev: Scene, event: CambioEvent): { scene: Scene; ste
       s.drawn = null;
       s.discard = [{ cardId: event.discard.cardId, face: { ...event.discard.face } }];
       s.discardCount = 1;
+      s.discardChain = 0;
       s.deckCount = event.deckCount;
       s.revealed = {};
       s.peek = null;
@@ -204,6 +215,7 @@ export function applyEvent(prev: Scene, event: CambioEvent): { scene: Scene; ste
       if (at) at.slot.cardId = event.cardId;
       s.drawn = null;
       pushDiscard(s, event.discarded);
+      s.discardChain = 0;
       const out: CardMove = {
         cardId: old,
         path: 'arc',
@@ -222,6 +234,7 @@ export function applyEvent(prev: Scene, event: CambioEvent): { scene: Scene; ste
     case 'discardedDrawn': {
       s.drawn = null;
       pushDiscard(s, event.card);
+      s.discardChain = 0;
       const out: CardMove = {
         cardId: event.card.cardId,
         path: 'arc',
@@ -289,6 +302,7 @@ export function applyEvent(prev: Scene, event: CambioEvent): { scene: Scene; ste
         at.seat.slots.splice(at.index, 1);
       }
       pushDiscard(s, event.card);
+      s.discardChain += 1;
       const effects: Effect[] = [
         { kind: 'impact', delay: timing.snapFlight },
         { kind: 'pileShake', delay: timing.snapFlight },
@@ -344,6 +358,7 @@ export function applyEvent(prev: Scene, event: CambioEvent): { scene: Scene; ste
       const buried = Math.max(0, prev.discardCount - 1);
       s.discard = s.discard.slice(-1);
       s.discardCount = s.discard.length;
+      s.discardChain = 0;
       s.deckCount = event.deckCount;
       return done({
         kind: 'reshuffle',
@@ -365,27 +380,35 @@ export function applyEvent(prev: Scene, event: CambioEvent): { scene: Scene; ste
       s.drawn = null;
       s.peek = null;
       const flips: CardFlip[] = [];
-      const order = s.seats.map((x) => x.playerId);
+      const stagger = opts.revealStagger ?? timing.revealStagger;
+      const perCard = cardStaggerFor(stagger);
+      const order = revealOrder(
+        s.seats.map((x) => x.playerId),
+        event.result.callerId,
+      );
       const hands = [...event.result.hands].sort(
         (a, b) => order.indexOf(a.playerId) - order.indexOf(b.playerId),
       );
+      let longest = 0;
       hands.forEach((hand, seatIndex) => {
-        for (const c of hand.cards) {
+        hand.cards.forEach((c, i) => {
           s.revealed[c.cardId] = { ...c.face };
+          const delay = seatIndex * stagger + i * perCard;
+          longest = Math.max(longest, delay);
           flips.push({
             cardId: c.cardId,
             face: { ...c.face },
             rotateY: [180, 0],
-            delay: seatIndex * timing.revealStagger,
+            delay,
             duration: timing.revealFlip,
           });
-        }
+        });
       });
       return done({
         kind: 'reveal',
         long: true,
         flips,
-        duration: Math.max(0, hands.length - 1) * timing.revealStagger + timing.revealFlip,
+        duration: longest + timing.revealFlip,
       });
     }
 
@@ -405,11 +428,12 @@ export function applyEvent(prev: Scene, event: CambioEvent): { scene: Scene; ste
 export function stepsFor(
   scene: Scene,
   events: readonly CambioEvent[],
+  opts: StepOptions = {},
 ): { scene: Scene; steps: Step[] } {
   const steps: Step[] = [];
   let s = scene;
   for (const e of events) {
-    const r = applyEvent(s, e);
+    const r = applyEvent(s, e, opts);
     steps.push(r.step);
     s = r.scene;
   }

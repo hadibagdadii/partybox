@@ -20,6 +20,8 @@ import {
 } from './test-helpers.js';
 import { getHostView, getPlayerView, type CambioHostView, type CambioPlayerView } from './views.js';
 
+export { card, facesIn, fillers, stackGame, type Stack } from './test-helpers.js';
+
 export type FixtureId =
   | 'deal'
   | 'draw'
@@ -36,7 +38,13 @@ export type FixtureId =
   | 'call'
   | 'reveal'
   | 'burst'
-  | 'holes';
+  | 'holes'
+  | 'chain'
+  | 'wrongSnapOther'
+  | 'lockedCall'
+  | 'peekPhase'
+  | 'matchRoundEnd'
+  | 'gameOver';
 
 export const FIXTURE_IDS: readonly FixtureId[] = [
   'deal',
@@ -55,6 +63,12 @@ export const FIXTURE_IDS: readonly FixtureId[] = [
   'reveal',
   'burst',
   'holes',
+  'chain',
+  'wrongSnapOther',
+  'lockedCall',
+  'peekPhase',
+  'matchRoundEnd',
+  'gameOver',
 ];
 
 /** One broadcast: the events one action emitted and the views right after it. */
@@ -117,6 +131,10 @@ function hands(count: number): Face[][] {
 }
 
 interface Script {
+  /** Changes the default hands, for scripts that need a particular card somewhere. */
+  hands?: (hands: Face[][]) => Face[][];
+  /** Start in the initial peek. */
+  peek?: boolean;
   deck?: Face[];
   discard?: Face[];
   played?: boolean;
@@ -132,7 +150,8 @@ interface Script {
 function game(count: number, script: Script): CambioState {
   const s = makeGame({
     count,
-    hands: hands(count),
+    hands: script.hands ? script.hands(hands(count)) : hands(count),
+    peek: script.peek,
     deck: script.deck ?? fillers(30),
     discard: script.discard ?? [card('9', 'clubs'), card('5', 'spades')],
     played: script.played,
@@ -287,6 +306,60 @@ const scripts: Record<FixtureId, (count: number) => Script> = {
       },
     };
   },
+  chain: () => ({
+    // Seats 1, 2 and 3 each hold a 5: three snaps stack on the 5 of Spades.
+    hands: (h) =>
+      h.map((cards, i) => (i === 3 ? [card('5', 'diamonds'), ...cards.slice(1)] : cards)),
+    actions: (s) => [
+      [pid(1), { type: 'snap', slotId: own(s, 1, 0), cardId: slot(s, 1, 0).card.id }],
+      [pid(2), { type: 'snap', slotId: own(s, 2, 0), cardId: slot(s, 2, 0).card.id }],
+      [pid(3), { type: 'snap', slotId: own(s, 3, 0), cardId: slot(s, 3, 0).card.id }],
+    ],
+  }),
+  wrongSnapOther: () => ({
+    actions: (s) => [
+      [
+        pid(2),
+        {
+          type: 'snap',
+          slotId: own(s, 1, 2),
+          cardId: slot(s, 1, 2).card.id,
+          giveSlotId: own(s, 2, 3),
+        },
+      ],
+    ],
+  }),
+  lockedCall: () => ({
+    played: true,
+    options: { lockCaller: true },
+    actions: () => (s) => {
+      if (!s.callerId) return [pid(0), { type: 'callCambio' }];
+      const turn = s.turn!;
+      if (turn.playerId !== pid(1) || s.log.some((e) => e.type === 'discardedDrawn')) return null;
+      return [turn.playerId, turn.stage === 'start' ? { type: 'draw' } : { type: 'discard' }];
+    },
+  }),
+  peekPhase: (count) => ({
+    peek: true,
+    actions: () => [1, 2, Math.min(4, count - 1)].map((i) => [pid(i), { type: 'ready' }]),
+  }),
+  matchRoundEnd: (count) => ({
+    played: true,
+    options: { scoringMode: 'match', matchTarget: 100 },
+    setup: (s) => {
+      // Totals from earlier rounds, high enough that the target is in sight.
+      s.players.forEach((p, i) => (s.totals[p.id] = 25 + (i % 5) * 8));
+      s.round = 3;
+      return lastTurn(count)(s);
+    },
+    actions: (s) => [[s.turn!.playerId, { type: 'discard' }]],
+  }),
+  gameOver: (count) => ({
+    played: true,
+    options: { scoringMode: 'single' },
+    setup: lastTurn(count),
+    actions: (s) => [[s.turn!.playerId, { type: 'discard' }]],
+  }),
   burst: () => {
     // Quick turns with racing snaps: about 30 events in 22 broadcasts.
     let n = 0;
@@ -306,6 +379,13 @@ const scripts: Record<FixtureId, (count: number) => Script> = {
       },
     };
   },
+};
+
+/** Plays the round out to its last turn and records that turn's discard: the reveal. */
+const lastTurn = (count: number) => (s: CambioState) => {
+  let next = act(s, pid(0), { type: 'callCambio' });
+  for (let i = 1; i < count - 1; i++) next = drawAndDiscard(next);
+  return act(next, next.turn!.playerId, { type: 'draw' });
 };
 
 /** Snaps `seat`'s first card, which is wrong on a 5: a penalty card into the first free spot. */

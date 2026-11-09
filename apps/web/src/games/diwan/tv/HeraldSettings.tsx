@@ -1,8 +1,8 @@
 import { theme } from '@partybox/diwan';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { EndGameButton } from './EndGame';
-import { herald, useHeraldState, type Voice } from './herald';
+import { herald, useHeraldState, useVoices } from './herald';
 
 /** "Enable the herald": speech can only start from a tap. */
 export function HeraldEnable({ className = '' }: { className?: string }) {
@@ -24,12 +24,6 @@ export function HeraldEnable({ className = '' }: { className?: string }) {
 /** Lobby slot on the generic host screen. */
 export function HeraldLobbyExtras() {
   return <HeraldEnable className="text-3xl" />;
-}
-
-function useVoices(): Voice[] {
-  const [voices, setVoices] = useState(herald.voices);
-  useEffect(() => herald.onVoicesChanged(() => setVoices(herald.voices())), []);
-  return voices;
 }
 
 /** Small gear menu: enable, mute, voice, About, ending the game, and starting a new room. */

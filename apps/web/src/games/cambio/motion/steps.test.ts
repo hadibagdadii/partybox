@@ -136,11 +136,35 @@ describe('steps', () => {
       if (x === e) break;
       scene = applyEvent(scene, x).scene;
     }
-    const { step } = applyEvent(scene, e);
-    const delays = [...new Set(step.flips.map((x) => x.delay))];
-    expect(delays).toHaveLength(6);
-    expect(delays).toEqual([...delays].sort((a, b) => a - b));
+    if (e.type !== 'roundRevealed') throw new Error('expected a reveal');
+    const { step } = applyEvent(scene, e, { revealStagger: 600 });
+    const ids = f.before.host.players.map((p) => p.id);
+    // The caller (seat 0) goes last; every other hand goes in seat order from seat 1.
+    expect(e.result.callerId).toBe(ids[0]);
+    const ownerOf = (cardId: string) =>
+      e.result.hands.find((h) => h.cards.some((c) => c.cardId === cardId))!.playerId;
+    const firstFlip = new Map<string, number>();
+    for (const x of step.flips) {
+      const o = ownerOf(x.cardId);
+      firstFlip.set(o, Math.min(firstFlip.get(o) ?? Infinity, x.delay));
+    }
+    const order = [...firstFlip.entries()].sort((a, b) => a[1] - b[1]).map(([id]) => id);
+    expect(order).toEqual([...ids.slice(1), ids[0]]);
+    expect([...firstFlip.values()].sort((a, b) => a - b)).toEqual([0, 600, 1200, 1800, 2400, 3000]);
+    // Within a hand the cards turn one after another, so its total can count up.
+    const hand = e.result.hands.find((h) => h.playerId === ids[1])!;
+    const delays = hand.cards.map((c) => step.flips.find((x) => x.cardId === c.cardId)!.delay);
+    expect(delays).toEqual([0, 120, 240, 360]);
     expect(step.long).toBe(true);
+  });
+
+  it('chained snaps count up on the discard and a discard starts a new chain', () => {
+    const f = buildFixture('snap', 6);
+    let scene = sceneFromView(f.before.host);
+    expect(scene.discardChain).toBe(0);
+    scene = stepsFor(scene, f.steps[0]!.events).scene;
+    expect(scene.discardChain).toBe(1);
+    expect(sceneFromView(f.steps[0]!.host).discardChain).toBe(1);
   });
 });
 

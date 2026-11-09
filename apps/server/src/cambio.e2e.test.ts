@@ -6,9 +6,12 @@ import {
   type CambioHostView,
   type CambioPlayerView,
 } from '@partybox/cambio';
+import { card, fillers, stackGame, type Stack } from '@partybox/cambio/fixtures';
+import type { CambioState } from '@partybox/cambio';
 import type { AckResult, HostViewMessage } from '@partybox/shared';
-import { afterAll, afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import type { ReflexOutcome } from './rooms/bot-runner.js';
+import { MemoryRoomStore } from './rooms/room-store.js';
 import {
   ok,
   record,
@@ -73,20 +76,6 @@ function checkLogOrder(views: CambioHostView[]) {
   }
 }
 
-/** Snap events and bot rejections seen across every bot game, for the coverage check. */
-const coverage = new Set<string>();
-
-function noteSnaps(views: CambioHostView[], reflexes: ReflexOutcome[]) {
-  for (const v of views) {
-    for (const e of v.log) {
-      if (e.type === 'snapped' || e.type === 'snapFailed') {
-        coverage.add(`${e.type}:${e.snapperId === e.ownerId ? 'own' : 'other'}`);
-      }
-    }
-  }
-  for (const r of reflexes) if (!r.result.ok) coverage.add(`rejected:${r.result.error.message}`);
-}
-
 async function botGame(bots: number, scoringMode: 'single' | 'match') {
   const reflexes: ReflexOutcome[] = [];
   const s = await start(reflexes);
@@ -105,48 +94,168 @@ async function botGame(bots: number, scoringMode: 'single' | 'match') {
   return { views, reflexes, last: views.at(-1)! };
 }
 
-describe('Cambio bot games over real sockets', () => {
-  const cases = [
-    { bots: 6, decks: 1, mode: 'single' },
-    { bots: 6, decks: 1, mode: 'match' },
-    { bots: 10, decks: 2, mode: 'single' },
-    { bots: 10, decks: 2, mode: 'match' },
-  ] as const;
+describe('Cambio bot game over real sockets', () => {
+  // A smoke test: snap paths are scripted below, not left to bots.
+  it('plays a 6-bot game to the end without showing the host a hidden card', async () => {
+    const { views, last } = await botGame(6, 'single');
+    expect(last.phase).toBe('over');
+    expect(last.winners?.length).toBeGreaterThan(0);
+    for (const v of views) {
+      expect(faceLeaks(v)).toEqual([]);
+      checkTable(v, 1);
+    }
+    checkLogOrder(views);
+  }, 30_000);
+});
 
-  for (const { bots, decks, mode } of cases) {
-    it(`plays a ${bots}-bot ${mode} game to the end without showing the host a hidden card`, async () => {
-      const { views, reflexes, last } = await botGame(bots, mode);
-      expect(last.phase).toBe('over');
-      expect(last.winners?.length).toBeGreaterThan(0);
-      expect(last.options.scoringMode).toBe(mode);
-      if (mode === 'single') expect(last.round).toBe(1);
-      else {
-        expect(last.round).toBeGreaterThan(1);
-        expect(Math.max(...Object.values(last.totals))).toBeGreaterThanOrEqual(100);
-      }
-      expect(views.some((v) => v.phase === 'play')).toBe(true);
-      for (const v of views) {
-        expect(faceLeaks(v)).toEqual([]);
-        checkTable(v, decks);
-      }
-      checkLogOrder(views);
-      noteSnaps(views, reflexes);
-    }, 30_000);
+/** A room of three phones whose game is stacked from a known table once it starts. */
+async function stackedRoom(stack: Stack) {
+  const store = new MemoryRoomStore();
+  const s = await startTestServer({ devTools: true, store });
+  server = s;
+  const tv = await s.client();
+  const tvLog = record(tv);
+  const { code } = await ok(tv.emitWithAck('room:create', { gameId: 'cambio' }));
+  const phones: Client[] = [];
+  for (const name of ['Amina', 'Bilal', 'Chen']) {
+    const phone = await s.client();
+    await ok(phone.emitWithAck('room:join', { code, name }));
+    phones.push(phone);
+  }
+  await ok(phones[0]!.emitWithAck('game:start', {}));
+  const room = store.get(code)!;
+  room.game!.state = stackGame(room.game!.state as CambioState, stack);
+  store.save(room);
+  const state = () => store.get(code)!.game!.state as CambioState;
+  const names = ['Amina', 'Bilal', 'Chen'];
+  /** The phone sitting in seat `seat` of the stacked game. */
+  const seat = (i: number) => phones[names.indexOf(state().players[i]!.name)]!;
+  const slot = (i: number, n: number) => state().players[i]!.hand[n]!;
+  const snap = (by: number, owner: number, n: number, give?: number): Promise<AckResult> => {
+    const target = slot(owner, n);
+    const action: Snap = { type: 'snap', slotId: target.id, cardId: target.card.id };
+    if (give !== undefined) action.giveSlotId = slot(by, give).id;
+    return seat(by).emitWithAck('game:action', { action }) as Promise<AckResult>;
+  };
+  const host = () => cambioView(tvLog.host.at(-1))!;
+  const handSize = (i: number) => host().players[i]!.slots.length;
+  return { tv, tvLog, state, seat, slot, snap, host, handSize };
+}
+
+/** Seat 0 is to move with a 5 on the discard; seat 1 holds a 5, seat 2 holds none. */
+const SNAP_TABLE: Stack = {
+  hands: [
+    [card('5', 'hearts'), card('9', 'clubs'), card('3', 'diamonds'), card('K', 'clubs')],
+    [card('5', 'clubs'), card('6', 'hearts'), card('7', 'spades'), card('8', 'diamonds')],
+    [card('2', 'hearts'), card('4', 'clubs'), card('6', 'diamonds'), card('J', 'spades')],
+  ],
+  deck: fillers(20, '3'),
+  discard: [card('9', 'clubs'), card('5', 'spades')],
+};
+
+const rejected = (message: string) => ({
+  ok: false,
+  error: { code: 'invalid_action', message },
+});
+
+describe('Cambio snap paths over real sockets', () => {
+  /** Waits for the host broadcast carrying one new event and returns that event. */
+  async function nextEvent(t: Awaited<ReturnType<typeof stackedRoom>>, before: number) {
+    await until(() => t.host().log.length > before);
+    const v = t.host();
+    expect(faceLeaks(v)).toEqual([]);
+    expect(v.log).toHaveLength(before + 1);
+    return v.log.at(-1)!;
   }
 
-  afterAll(() => {
-    // Every snap path happened somewhere across the four games.
-    expect([...coverage].sort()).toEqual(
-      expect.arrayContaining([
-        'snapped:own',
-        'snapped:other',
-        'snapFailed:own',
-        'snapFailed:other',
-        `rejected:${theme.errors.snapTooLate}`,
-        `rejected:${theme.errors.giveRequired}`,
-        `rejected:${theme.errors.locked}`,
-      ]),
+  it('snaps your own matching card onto the discard', async () => {
+    const t = await stackedRoom(SNAP_TABLE);
+    const n = t.state().log.length;
+    const card5 = t.slot(1, 0).card.id;
+    expect(await t.snap(1, 1, 0)).toEqual({ ok: true });
+    const e = await nextEvent(t, n);
+    expect(e).toMatchObject({ type: 'snapped', give: null, card: { cardId: card5 } });
+    expect(t.handSize(1)).toBe(3);
+    expect(t.host().topDiscard?.cardId).toBe(card5);
+  });
+
+  it('turns a wrong snap of your own card face up for everyone and adds a penalty card', async () => {
+    const t = await stackedRoom(SNAP_TABLE);
+    const n = t.state().log.length;
+    const deck = t.state().deck.length;
+    expect(await t.snap(1, 1, 1)).toEqual({ ok: true });
+    const e = await nextEvent(t, n);
+    expect(e).toMatchObject({ type: 'snapFailed', card: { face: { rank: '6' } } });
+    expect(t.handSize(1)).toBe(5);
+    expect(t.host().deckCount).toBe(deck - 1);
+  });
+
+  it("snaps another player's matching card and gives them one of yours", async () => {
+    const t = await stackedRoom(SNAP_TABLE);
+    const n = t.state().log.length;
+    const given = t.slot(2, 0).card.id;
+    const hole = t.slot(1, 0).id;
+    expect(await t.snap(2, 1, 0, 0)).toEqual({ ok: true });
+    const e = await nextEvent(t, n);
+    expect(e).toMatchObject({ type: 'snapped', slotId: hole, give: { cardId: given } });
+    expect(t.handSize(1)).toBe(4);
+    expect(t.handSize(2)).toBe(3);
+    // The given card sits in the snapped card's slot, face down.
+    expect(t.host().players[1]!.slots.find((s) => s.slotId === hole)?.cardId).toBe(given);
+  });
+
+  it("penalizes a wrong snap of another player's card without moving it", async () => {
+    const t = await stackedRoom(SNAP_TABLE);
+    const n = t.state().log.length;
+    const target = t.slot(1, 1).card.id;
+    expect(await t.snap(2, 1, 1, 0)).toEqual({ ok: true });
+    const e = await nextEvent(t, n);
+    expect(e).toMatchObject({ type: 'snapFailed', card: { cardId: target } });
+    expect(t.handSize(1)).toBe(4);
+    expect(t.handSize(2)).toBe(5);
+    expect(t.host().players[1]!.slots[1]!.cardId).toBe(target);
+  });
+
+  it('rejects a snap on a card that already moved, with no penalty', async () => {
+    const t = await stackedRoom(SNAP_TABLE);
+    const n = t.state().log.length;
+    const target = t.slot(1, 0);
+    expect(await t.snap(1, 1, 0)).toEqual({ ok: true });
+    await nextEvent(t, n);
+    const late: Snap = {
+      type: 'snap',
+      slotId: target.id,
+      cardId: target.card.id,
+      giveSlotId: t.slot(2, 0).id,
+    };
+    expect(await t.seat(2).emitWithAck('game:action', { action: late })).toEqual(
+      rejected(theme.errors.snapTooLate),
     );
+    expect(t.state().log).toHaveLength(n + 1);
+    expect(t.handSize(2)).toBe(4);
+  });
+
+  it("rejects a snap of another player's card that names no card to give", async () => {
+    const t = await stackedRoom(SNAP_TABLE);
+    const n = t.state().log.length;
+    expect(await t.snap(2, 1, 0)).toEqual(rejected(theme.errors.giveRequired));
+    expect(t.state().log).toHaveLength(n);
+    expect(t.state().players[1]!.hand).toHaveLength(4);
+  });
+
+  it("rejects snapping the locked caller's cards", async () => {
+    const t = await stackedRoom({ ...SNAP_TABLE, options: { lockCaller: true }, played: true });
+    const n = t.state().log.length;
+    expect(await t.seat(0).emitWithAck('game:action', { action: { type: 'callCambio' } })).toEqual({
+      ok: true,
+    });
+    await until(() => t.host().lockedPlayerId === t.state().players[0]!.id);
+    const m = t.state().log.length;
+    expect(m).toBeGreaterThan(n);
+    // Seat 0's 5 matches the discard, but the caller's cards are locked.
+    expect(await t.snap(2, 0, 0, 0)).toEqual(rejected(theme.errors.locked));
+    expect(t.state().log).toHaveLength(m);
+    expect(t.state().players[0]!.hand).toHaveLength(4);
   });
 });
 

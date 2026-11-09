@@ -1,4 +1,10 @@
-import type { CambioHostView, CambioPlayerView, Face, PublicCard } from '@partybox/cambio';
+import type {
+  CambioEvent,
+  CambioHostView,
+  CambioPlayerView,
+  Face,
+  PublicCard,
+} from '@partybox/cambio';
 
 export interface SceneSlot {
   slotId: string;
@@ -16,6 +22,8 @@ export interface Scene {
   drawn: { playerId: string; cardId: string } | null;
   /** The top few cards of the discard pile, top card last. Buried cards are not tracked. */
   discard: PublicCard[];
+  /** Snaps stacked on the discard since the last card was discarded or dealt to it. */
+  discardChain: number;
   deckCount: number;
   discardCount: number;
   /** Hand cards shown face up to everyone: the round reveal. */
@@ -26,7 +34,26 @@ export interface Scene {
 }
 
 /** How many discard cards stay mounted under the top, for a natural-looking pile. */
-export const DISCARD_KEEP = 3;
+export const DISCARD_KEEP = 4;
+
+/** Events that put a card on the discard other than a snap, which start a new chain. */
+const CHAIN_BREAKS = new Set<CambioEvent['type']>([
+  'dealt',
+  'swapped',
+  'discardedDrawn',
+  'reshuffled',
+]);
+
+/** Snaps on the discard since the last card was discarded, read from the round's log. */
+export function chainIn(log: readonly CambioEvent[]): number {
+  let n = 0;
+  for (let i = log.length - 1; i >= 0; i--) {
+    const e = log[i]!;
+    if (CHAIN_BREAKS.has(e.type)) break;
+    if (e.type === 'snapped') n += 1;
+  }
+  return n;
+}
 
 export function sceneFromView(view: CambioHostView): Scene {
   const turn = view.turn;
@@ -47,6 +74,7 @@ export function sceneFromView(view: CambioHostView): Scene {
     discard: view.topDiscard
       ? [{ cardId: view.topDiscard.cardId, face: { ...view.topDiscard.face } }]
       : [],
+    discardChain: chainIn(view.log),
     deckCount: view.deckCount,
     discardCount: view.discardCount,
     revealed,
@@ -70,6 +98,7 @@ export function sceneKey(s: Scene) {
     seats: s.seats,
     drawn: s.drawn,
     top: s.discard[s.discard.length - 1] ?? null,
+    chain: s.discardChain,
     deckCount: s.deckCount,
     discardCount: s.discardCount,
     revealed: Object.entries(s.revealed).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),

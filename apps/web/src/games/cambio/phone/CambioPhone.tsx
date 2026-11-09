@@ -6,6 +6,7 @@ import type { PlayerScreenProps } from '../../registry';
 import type { Perspective } from '../motion/CardLayer';
 import { CambioTable, useSize } from '../motion/CambioTable';
 import { handCols, phoneLayout } from '../motion/layout';
+import { devMotion } from '../motion/dev-motion';
 import { useCambioMotion } from '../motion/useCambioMotion';
 import { CambioBanner, Hint, SnapNotice, type Notice, type NoticeInput } from './Callouts';
 import { HandHits } from './HandHits';
@@ -28,12 +29,7 @@ export const PEEK_SHOW_MS = 3000;
 const NOTICE_MS = { wrong: 2400, tooLate: 1200 } as const;
 const EMPTY: Record<string, Face> = {};
 
-/** Dev only: `?slowmo=4` plays the table four times slower, for checking motion by eye. */
-const DEV_MOTION = (() => {
-  if (!import.meta.env.DEV || typeof location === 'undefined') return {};
-  const n = Number(new URLSearchParams(location.search).get('slowmo'));
-  return Number.isFinite(n) && n >= 1 && n <= 10 ? { timeScale: n } : {};
-})();
+const DEV_MOTION = devMotion();
 
 interface PickerSpec {
   title: string;
@@ -506,7 +502,12 @@ export function CambioPhone({ you: seat, game, act, reset, playAgain }: PlayerSc
       {layout && (
         <>
           <MiniHands view={view} layout={layout} frame={frame} />
-          <PeekMarker view={view} layout={layout} frame={frame} />
+          <PeekMarker
+            players={view.players}
+            viewerId={view.you?.id ?? null}
+            layout={layout}
+            frame={frame}
+          />
           <CambioBanner
             layout={layout}
             text={bannerText}

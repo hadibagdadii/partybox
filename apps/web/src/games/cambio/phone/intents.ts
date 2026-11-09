@@ -119,15 +119,4 @@ export function blindPair(
   return pairs.find(([a, b]) => (a === x && b === y) || (a === y && b === x)) ?? null;
 }
 
-/**
- * Turns left after Cambio: everyone from the current player up to (not including) the caller.
- * Zero when nobody has called or the round is not in play.
- */
-export function turnsLeft(view: Pick<CambioPlayerView, 'players' | 'turn' | 'callerId'>): number {
-  if (!view.callerId || !view.turn) return 0;
-  const order = view.players.map((p) => p.id);
-  const caller = order.indexOf(view.callerId);
-  const current = order.indexOf(view.turn.playerId);
-  if (caller < 0 || current < 0) return 0;
-  return (caller - current + order.length) % order.length;
-}
+export { turnsLeft } from '../format';

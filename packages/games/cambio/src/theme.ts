@@ -243,6 +243,57 @@ export const theme = {
     miniHand: (name: string, cards: number, theirTurn: boolean) =>
       `${name}, ${cards} ${cards === 1 ? 'card' : 'cards'}${theirTurn ? ', their turn' : ''}`,
   },
+  /** Words on the TV. */
+  tv: {
+    snap: 'Snap!',
+    chain: (n: number) => `×${n}`,
+    wrongSnap: 'Wrong snap',
+    called: (name: string) => `${name} called Cambio!`,
+    calledShort: (name: string) => `${name} called Cambio`,
+    finalTurns: (n: number) =>
+      n === 0 ? 'Revealing' : n === 1 ? '1 final turn' : `${n} final turns`,
+    locked: 'Locked',
+    reshuffling: 'Reshuffling',
+    peekPhase: 'Everyone peeks at their bottom two',
+    ready: 'Ready',
+    away: 'Away',
+    caller: 'Called',
+    deck: (n: number) => `${n} in the deck`,
+    standings: (round: number) => `Round ${round}`,
+    matchStandings: 'Match standings',
+    round: 'Round',
+    total: 'Total',
+    playingTo: (target: number) => `Playing to ${target}`,
+    leading: (names: string[]) => `Leading: ${list(names)}`,
+    closestTo: (name: string, target: number) => `${name} is closest to ${target}`,
+    waitingForVip: 'Waiting for the VIP to start the next round',
+    roomCode: 'Room code',
+    events: 'What just happened',
+    heraldEnable: 'Turn on narration and sound',
+    heraldReady: 'Narration and sound are on',
+    heraldMute: 'Mute narration',
+    heraldVoice: 'Narrator voice',
+    heraldDefaultVoice: 'Default voice',
+    soundMute: 'Mute card sounds',
+    settings: 'Settings',
+    about: 'About Partybox',
+    endGame: 'End game',
+    endGameConfirm: 'End the game for everyone?',
+    cancel: 'Cancel',
+    newRoom: 'New room',
+  },
+  /** Short spoken lines, built only from public events. */
+  herald: {
+    ready: "The dealer's ready.",
+    turn: (name: string) => `${name}'s turn.`,
+    called: (name: string) => `${name} calls Cambio! One more turn each.`,
+    snapped: (name: string) => `Snap! ${name}.`,
+    wrongSnap: (name: string) => `Wrong snap, ${name}. Take a penalty.`,
+    roundWinner: (names: string[], score: number) =>
+      `${list(names)} ${names.length === 1 ? 'takes' : 'take'} the round with ${score}.`,
+    gameWinner: (names: string[]) =>
+      `${list(names)} ${names.length === 1 ? 'wins' : 'win'} the game!`,
+  },
   results: {
     /** For the TV and logs, with real names. Phones use `winnerLine`. */
     roundWinner,

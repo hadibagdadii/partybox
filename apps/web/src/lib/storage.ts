@@ -90,3 +90,9 @@ export const heraldPrefs = {
   setVoice: (uri: string | null) =>
     uri ? write('partybox:herald:voice', uri) : remove('partybox:herald:voice'),
 };
+
+/** Cambio's TV: whether the synthesized card sounds are muted. */
+export const cambioPrefs = {
+  soundMuted: () => read('partybox:cambio:soundMuted') === '1',
+  setSoundMuted: (muted: boolean) => write('partybox:cambio:soundMuted', muted ? '1' : '0'),
+};

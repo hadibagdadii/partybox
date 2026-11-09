@@ -7,6 +7,7 @@ import type {
 import { io as connect, type Socket as ClientSocket } from 'socket.io-client';
 import { DEFAULT_LIMITS, type ServerConfig } from './config.js';
 import { silentLogger, type Logger } from './logger.js';
+import type { RoomStore } from './rooms/room-store.js';
 import { createPartyboxServer, type PartyboxServer } from './server.js';
 
 export type Client = ClientSocket<ServerToClientEvents, ClientToServerEvents>;
@@ -18,7 +19,7 @@ export interface TestServer {
   close(): Promise<void>;
 }
 
-export type TestServerOptions = Partial<ServerConfig> & { logger?: Logger };
+export type TestServerOptions = Partial<ServerConfig> & { logger?: Logger; store?: RoomStore };
 
 /** Dev settings unless overridden; no web app served. */
 export function testConfig(overrides: Partial<ServerConfig> = {}): ServerConfig {
@@ -44,9 +45,10 @@ export function testConfig(overrides: Partial<ServerConfig> = {}): ServerConfig 
 /** A real Partybox server on a random port, with dev tools on unless told otherwise. */
 export async function startTestServer({
   logger = silentLogger,
+  store,
   ...overrides
 }: TestServerOptions = {}): Promise<TestServer> {
-  const server = createPartyboxServer(testConfig(overrides), logger);
+  const server = createPartyboxServer(testConfig(overrides), logger, store);
   const port = await server.listen(0);
   const url = `http://localhost:${port}`;
   const clients: Client[] = [];

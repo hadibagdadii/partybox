@@ -20,6 +20,7 @@ function table(): Scene {
     discard: [{ cardId: 'top', face: king }],
     deckCount: 30,
     discardCount: 1,
+    discardChain: 0,
     revealed: {},
     peek: null,
     callerId: null,

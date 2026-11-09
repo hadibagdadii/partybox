@@ -14,7 +14,12 @@ export default tseslint.config(
   },
   {
     // Drives a browser: parts of it run inside the page.
-    files: ['scripts/cambio-fps.mjs', 'scripts/cambio-phone-playthrough.mjs'],
+    files: [
+      'scripts/cambio-fps.mjs',
+      'scripts/cambio-phone-playthrough.mjs',
+      'scripts/tv-playthrough.mjs',
+      'scripts/tv-gallery-shots.mjs',
+    ],
     languageOptions: { globals: { ...globals.node, ...globals.browser } },
   },
   {

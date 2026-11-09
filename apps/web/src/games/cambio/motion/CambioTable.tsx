@@ -88,6 +88,8 @@ export function CambioTable({
   layout: given,
   plates = true,
   over,
+  under: below,
+  bare = false,
   className,
 }: {
   view: CambioHostView;
@@ -100,6 +102,10 @@ export function CambioTable({
   plates?: boolean;
   /** Drawn above the cards, inside the table. */
   over?: ReactNode;
+  /** Drawn under the cards, above the piles (the TV's turn glow). */
+  under?: ReactNode;
+  /** No felt behind the cards: the caller draws its own table (the TV's oval). */
+  bare?: boolean;
   className?: string;
 }) {
   const { ref, size } = useSize();
@@ -116,7 +122,14 @@ export function CambioTable({
   const { scene, playing, timeScale } = frame;
 
   return (
-    <Felt className={className} style={{ width: '100%', height: '100%' }}>
+    <Felt
+      className={className}
+      style={
+        bare
+          ? { width: '100%', height: '100%', background: 'none' }
+          : { width: '100%', height: '100%' }
+      }
+    >
       <div ref={ref} style={{ position: 'absolute', inset: 0 }}>
         {layout && (
           <CardLayer
@@ -132,6 +145,7 @@ export function CambioTable({
                 <DeckStack layout={layout} count={scene.deckCount} />
                 <DiscardBase layout={layout} count={scene.discardCount} playing={playing} />
                 <ImpactRing layout={layout} playing={playing} timeScale={timeScale} />
+                {below}
                 {plates && <SeatPlates layout={layout} view={view} frame={frame} />}
               </>
             }

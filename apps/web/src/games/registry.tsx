@@ -4,6 +4,8 @@ import { CambioDebugHost } from './cambio/CambioDebugHost';
 import { CambioDebugPlayer } from './cambio/CambioDebugPlayer';
 import { CambioPhone } from './cambio/phone/CambioPhone';
 import { cambioOptionFields } from './cambio/options';
+import { CambioLobbyExtras } from './cambio/tv/CambioSettings';
+import { CambioTv } from './cambio/tv/CambioTv';
 import { DiwanDebugPlayer } from './diwan/DiwanDebugPlayer';
 import { DiwanDebugHost } from './diwan/DiwanDebugHost';
 import { DiwanLobby } from './diwan/phone/screens/DiwanLobby';
@@ -100,10 +102,12 @@ export const gameScreens: Record<string, GameScreens> = {
     HostTutorial: TutorialTv,
     Tutorial: TutorialPhone,
   },
-  // The TV stays on its debug screen until it ships; ?debug=1 keeps reaching both in dev.
+  // ?debug=1 keeps reaching the plain-text screens in dev.
   cambio: {
-    Host: CambioDebugHost,
+    Host: CambioTv,
     HostDebug: CambioDebugHost,
+    hostFullScreen: true,
+    HostLobbyExtras: CambioLobbyExtras,
     Player: CambioPhone,
     fullScreen: true,
     Debug: CambioDebugPlayer,

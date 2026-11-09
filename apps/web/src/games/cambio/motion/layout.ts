@@ -1,5 +1,5 @@
 import { CARD_RATIO } from '../tokens';
-import type { Scene } from './scene';
+import { DISCARD_KEEP, type Scene } from './scene';
 
 /** A card's resting transform. x/y are the card's center in px within the layer. */
 export interface Pose {
@@ -97,66 +97,194 @@ function peekToward(rest: Pose, seat: SeatAnchor | undefined, lift: number): Pos
   };
 }
 
+/** A rectangle in px within the layer. */
+export interface Box {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 /** Columns a TV hand may span at full card size; wider hands scale their cards down. */
 export const TV_MAX_COLS = 2.4;
 
-/** The TV: seats on an ellipse around the deck and discard in the middle. */
-export function tableLayout(
-  width: number,
-  height: number,
-  playerIds: readonly string[],
-): TableLayout {
-  const n = Math.max(playerIds.length, 1);
-  const pileW = Math.min(height * 0.2, width * 0.12);
-  const sprite = Math.round(pileW);
-  const cx = width / 2;
-  const cy = height / 2;
+/** Does `a` overlap `b`, with `pad` px kept between them? */
+export const boxesOverlap = (a: Box, b: Box, pad = 0): boolean =>
+  a.x < b.x + b.w + pad && b.x < a.x + a.w + pad && a.y < b.y + b.h + pad && b.y < a.y + a.h + pad;
 
-  /** Seats around the ellipse for a given card width. */
-  const place = (tableW: number) => {
-    const gap = tableW * 0.1;
-    const blockW = 2 * tableW + gap;
-    const blockH = 2 * tableW * CARD_RATIO + gap;
-    const label = Math.max(22, tableW * 0.42);
-    const rx = width / 2 - blockW / 2 - width * 0.04;
-    const ry = height / 2 - blockH / 2 - label - height * 0.03;
-    const seats: SeatAnchor[] = playerIds.map((playerId, i) => {
-      // Even tables turn half a seat so two seats sit on the long sides of a 16:9 screen.
-      const offset = n % 2 === 0 && n >= 4 ? Math.PI / n : 0;
-      const a = Math.PI / 2 + offset + (i * 2 * Math.PI) / n;
-      const x = cx + rx * Math.cos(a);
-      const y = cy + ry * Math.sin(a);
-      const below = Math.sin(a) >= -0.01;
+/** A TV seat: its hand, and the name plate on the outer side of the table. */
+export interface TvSeat extends SeatAnchor {
+  /** The plate sits above the hand on the top half of the table, below it otherwise. */
+  plateSide: 'above' | 'below';
+  plateW: number;
+  plateH: number;
+  /** The hand at its widest plus the plate: nothing else may enter it. */
+  box: Box;
+}
+
+export interface TvLayout extends TableLayout {
+  seats: TvSeat[];
+  /** The deck, the discard and room for the callouts over them. */
+  pileBox: Box;
+  /** The felt oval the hands sit on. */
+  felt: { cx: number; cy: number; rx: number; ry: number };
+  /** Bars along the top and bottom edges kept free for the room code, banner, and ticker. */
+  bands: { top: number; bottom: number };
+  /** The card width hands use at the dealt size. */
+  cardW: number;
+}
+
+/** Share of the height kept free at the top and bottom edges. */
+const TOP_BAND = 0.075;
+const BOTTOM_BAND = 0.07;
+
+/**
+ * Points on an ellipse at equal distances along its edge, starting at the bottom center and
+ * going clockwise on screen (bottom, left, top, right). Equal arc length rather than equal
+ * angle keeps a wide table's seats evenly spread instead of bunched at the ends.
+ */
+export function ellipseSeats(
+  n: number,
+  rx: number,
+  ry: number,
+  offset: number,
+): { x: number; y: number; angle: number }[] {
+  const steps = 2048;
+  const lens: number[] = [0];
+  const at = (t: number) => ({ x: rx * Math.cos(t), y: ry * Math.sin(t) });
+  for (let i = 1; i <= steps; i++) {
+    const a = at(Math.PI / 2 + ((i - 1) * 2 * Math.PI) / steps);
+    const b = at(Math.PI / 2 + (i * 2 * Math.PI) / steps);
+    lens.push(lens[i - 1]! + Math.hypot(b.x - a.x, b.y - a.y));
+  }
+  const total = lens[steps]!;
+  return Array.from({ length: n }, (_, i) => {
+    const want = (((i + offset) / n) % 1) * total;
+    let lo = 0;
+    let hi = steps;
+    while (hi - lo > 1) {
+      const mid = (lo + hi) >> 1;
+      if (lens[mid]! <= want) lo = mid;
+      else hi = mid;
+    }
+    const frac = (want - lens[lo]!) / (lens[lo + 1]! - lens[lo]! || 1);
+    const angle = Math.PI / 2 + ((lo + frac) * 2 * Math.PI) / steps;
+    const p = at(angle);
+    // Snap tiny float noise so mirrored seats compare equal.
+    const round = (v: number) => Math.round(v * 1000) / 1000;
+    return { x: round(p.x), y: round(p.y), angle };
+  });
+}
+
+/** Nominal card width for a table of `n`, as a share of the height. */
+const nominalCard = (n: number) =>
+  n <= 3 ? 0.12 : n <= 4 ? 0.11 : n <= 6 ? 0.1 : n <= 8 ? 0.088 : n <= 10 ? 0.078 : 0.07;
+
+/**
+ * The TV: a felt oval with seats around its edge and the deck and discard big in the middle.
+ * Seats are spread at equal distances along the oval, starting bottom center (odd tables) or
+ * straddling it (even tables), so every table is mirror-symmetric. Cards start at a nominal
+ * size for the table and shrink until no seat (its widest hand plus its name plate) touches
+ * another seat, the piles, or the bars along the top and bottom edges. Pure.
+ */
+export function tableLayout(width: number, height: number, playerIds: readonly string[]): TvLayout {
+  const n = Math.max(playerIds.length, 1);
+  const top = Math.round(height * TOP_BAND);
+  const bottom = Math.round(height * BOTTOM_BAND);
+  const playTop = top;
+  const playBottom = height - bottom;
+  const cx = width / 2;
+  const cy = (playTop + playBottom) / 2;
+  const margin = width * 0.012;
+
+  // Big in the middle; a little smaller on crowded tables, which need the height for seats.
+  const pileW = Math.min(height * (n <= 2 ? 0.2 : n <= 8 ? 0.175 : 0.16), width * 0.115);
+  const pileH = pileW * CARD_RATIO;
+  const pileBox: Box = {
+    x: cx - pileW * 1.2,
+    y: cy - pileH * 0.54,
+    w: pileW * 2.4,
+    h: pileH * 1.08,
+  };
+  const sprite = Math.round(pileW);
+  /**
+   * Which side of the hand the drawn card sits on. Seats at the ends of the table hold it toward
+   * the middle; along the long sides it follows the turn order around the table (right on the
+   * bottom row, left on the top), so two neighbors never both reserve the gap between them.
+   */
+  const drawnSide = (x: number, y: number, rx: number): 1 | -1 => {
+    if (Math.abs(x - cx) > rx * 0.82) return x > cx ? -1 : 1;
+    return y >= cy ? 1 : -1;
+  };
+
+  const place = (cardW: number) => {
+    const gap = cardW * 0.1;
+    const handW = TV_MAX_COLS * (cardW + gap);
+    const handH = 2 * cardW * CARD_RATIO + gap;
+    // Names stay readable from across a room even when the cards get small.
+    const plateH = Math.max(height * 0.037, cardW * 0.5);
+    const plateW = Math.max(handW, cardW * 2.7);
+    // Room beside the hand, on the side toward the middle, for the card its player draws.
+    // The held card tucks a little over the hand's edge, lifted above it.
+    const drawnRoom = gap + cardW * 1.15 * 0.8;
+    const boxW = Math.max(handW / 2, plateW / 2) + Math.max(handW / 2 + drawnRoom, plateW / 2);
+    const boxH = handH + plateH + gap;
+    const rx = width / 2 - margin - boxW / 2;
+    const ry = (playBottom - playTop) / 2 - handH / 2 - plateH - gap * 1.5;
+    // Two players face each other across the piles; even tables straddle the bottom center.
+    const offset = n % 2 === 0 ? 0.5 : 0;
+    const spots = ellipseSeats(n, rx, ry, offset);
+    const seats: TvSeat[] = playerIds.map((playerId, i) => {
+      const spot = spots[i]!;
+      const x = cx + spot.x;
+      const y = cy + spot.y;
+      const plateSide = spot.y < -0.01 ? 'above' : 'below';
+      const labelY =
+        plateSide === 'above' ? y - handH / 2 - gap - plateH / 2 : y + handH / 2 + gap + plateH / 2;
+      const boxTop = plateSide === 'above' ? y - handH / 2 - gap - plateH : y - handH / 2;
+      const inward = drawnSide(x, y, rx);
+      const near = Math.max(handW / 2, plateW / 2);
+      const boxX = inward > 0 ? x - near : x - (boxW - near);
       return {
         playerId,
         x,
         y,
         labelX: x,
-        labelY: y + (below ? 1 : -1) * (blockH / 2 + label * 0.75),
-        cardWidth: tableW,
+        labelY,
+        cardWidth: cardW,
+        plateSide,
+        plateW,
+        plateH,
+        box: { x: boxX, y: boxTop, w: boxW, h: boxH },
       };
     });
-    // Two neighbors clear each other side by side (at the widest a hand grows) or one above the
-    // other with room for a name plate between them.
-    const widest = TV_MAX_COLS * (tableW + gap);
+    const pad = gap;
     const clear = seats.every((a, i) => {
-      if (n < 2) return true;
-      const b = seats[(i + 1) % n]!;
-      return Math.abs(a.x - b.x) >= widest + gap * 2 || Math.abs(a.y - b.y) >= blockH + label * 1.6;
+      const b = a.box;
+      if (b.x < margin - 0.5 || b.x + b.w > width - margin + 0.5) return false;
+      if (b.y < playTop - 0.5 || b.y + b.h > playBottom + 0.5) return false;
+      if (boxesOverlap(b, pileBox, pad)) return false;
+      return seats.every((o, j) => j <= i || !boxesOverlap(b, o.box, pad));
     });
-    return { seats, gap, clear };
+    return { seats, gap, clear, rx, ry, handH };
   };
 
-  // The nominal size for the table, shrunk step by step until neighboring hands clear.
-  let tableW = Math.min(height * (n <= 6 ? 0.095 : n <= 8 ? 0.085 : 0.072), width * 0.056);
-  let placed = place(tableW);
-  for (let i = 0; i < 24 && !placed.clear; i++) {
-    tableW *= 0.95;
-    placed = place(tableW);
+  let cardW = Math.min(height * nominalCard(n), width * 0.062);
+  let placed = place(cardW);
+  for (let i = 0; i < 30 && !placed.clear; i++) {
+    cardW *= 0.95;
+    placed = place(cardW);
   }
-  const { seats, gap } = placed;
-  const blockW = 2 * tableW + gap;
+  const { seats, gap, rx, ry, handH } = placed;
   const seatOf = (id: string) => seats.find((s) => s.playerId === id);
+  // Big enough to hold every hand, and inside the edge bars with room for the rail around it.
+  const rail = Math.max(14, height * 0.022);
+  const felt = {
+    cx,
+    cy,
+    rx: Math.min(rx + cardW * 1.3, width / 2 - rail - margin),
+    ry: Math.min(ry + handH * 0.75, (playBottom - playTop) / 2 - rail),
+  };
 
   return {
     width,
@@ -165,39 +293,35 @@ export function tableLayout(
     deck: { x: cx - pileW * 0.62, y: cy, scale: pileW / sprite, rotate: 0 },
     discard: { x: cx + pileW * 0.62, y: cy, scale: pileW / sprite, rotate: 0 },
     seats,
+    pileBox,
+    felt,
+    bands: { top, bottom },
+    cardW,
     slot(playerId, pos, cols) {
       const seat = seatOf(playerId);
       // Penalty columns widen a hand; its cards shrink so the hand stays about as wide as the
       // dealt 2×2 and never runs into a neighbor, even on a crowded 12-seat table.
-      const cardW = tableW * Math.min(1, TV_MAX_COLS / cols);
-      const cardGap = gap * (cardW / tableW);
-      const w = cols * (cardW + cardGap);
-      const margin = width * 0.012;
-      const x = Math.min(Math.max(seat?.x ?? cx, margin + w / 2), width - margin - w / 2);
-      return handPose(x, seat?.y ?? cy, cardW, cardGap, pos, cols, sprite);
+      const w = cardW * Math.min(1, TV_MAX_COLS / cols);
+      return handPose(seat?.x ?? cx, seat?.y ?? cy, w, gap * (w / cardW), pos, cols, sprite);
     },
     drawn(playerId) {
       const seat = seatOf(playerId);
       const sx = seat?.x ?? cx;
       const sy = seat?.y ?? cy;
-      // Beside the hand, on the side toward the middle of the table, clear of the piles.
-      const side = cx - sx >= 0 ? 1 : -1;
-      const drawnW = tableW * 1.2;
-      const reach = blockW / 2 + drawnW / 2 + gap * 3;
-      return { x: sx + side * reach, y: sy, scale: drawnW / sprite, rotate: side * -3 };
+      const drawnW = cardW * 1.15;
+      const side = drawnSide(sx, sy, rx);
+      const handW = TV_MAX_COLS * (cardW + gap);
+      return {
+        x: sx + side * (handW / 2 + gap + drawnW * 0.3),
+        y: sy,
+        scale: drawnW / sprite,
+        rotate: side * -4,
+      };
     },
     peek(rest, peekerId) {
-      return peekToward(rest, seatOf(peekerId), tableW * CARD_RATIO * 0.45);
+      return peekToward(rest, seatOf(peekerId), cardW * CARD_RATIO * 0.45);
     },
   };
-}
-
-/** A rectangle in px within the layer. */
-export interface Box {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
 }
 
 /** One other player's mini hand on the phone: the whole box, its name line, and its cards. */
@@ -441,13 +565,17 @@ export function posesFor(scene: Scene, layout: TableLayout): Map<string, Pose> {
     });
   }
   if (scene.drawn) out.set(scene.drawn.cardId, layout.drawn(scene.drawn.playerId));
+  // Chained snaps fan out across the pile, so a stack of them reads at a glance.
+  const fan = scene.discardChain > 0 ? Math.min(scene.discardChain + 1, DISCARD_KEEP) : 0;
+  const cardW = layout.spriteWidth * layout.discard.scale;
   scene.discard.forEach((c, i) => {
     const depth = scene.discard.length - 1 - i;
+    const fanned = depth < fan;
     out.set(c.cardId, {
       ...layout.discard,
-      x: layout.discard.x + depth * 1.5,
-      y: layout.discard.y + depth * 1.5,
-      rotate: tossAngle(c.cardId),
+      x: layout.discard.x + (fanned ? -depth * cardW * 0.14 : depth * 1.5),
+      y: layout.discard.y + (fanned ? depth * cardW * 0.03 : depth * 1.5),
+      rotate: tossAngle(c.cardId) + (fanned ? -depth * 7 : 0),
     });
   });
   return out;

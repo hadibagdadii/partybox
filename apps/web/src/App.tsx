@@ -12,6 +12,9 @@ import { Play } from './routes/Play';
 const DevCambioCards = lazy(() =>
   import('./routes/DevCambioCards').then((m) => ({ default: m.DevCambioCards })),
 );
+const DevCambioHost = lazy(() =>
+  import('./routes/DevCambioHost').then((m) => ({ default: m.DevCambioHost })),
+);
 
 export function AppRoutes() {
   return (
@@ -29,6 +32,16 @@ export function AppRoutes() {
           element={
             <Suspense fallback={null}>
               <DevCambioCards />
+            </Suspense>
+          }
+        />
+      )}
+      {import.meta.env.DEV && (
+        <Route
+          path="/dev/cambio-host"
+          element={
+            <Suspense fallback={null}>
+              <DevCambioHost />
             </Suspense>
           }
         />

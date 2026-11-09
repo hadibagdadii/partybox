@@ -15,6 +15,8 @@ export interface MotionFrame {
   /** Ms of motion queued behind the current step. */
   backlog: number;
   collapsed: number;
+  /** Events received but not yet started on screen, newest last in the view's log. */
+  pending: number;
 }
 
 export interface MotionOptions {
@@ -22,6 +24,8 @@ export interface MotionOptions {
   reduced?: boolean;
   timeScale?: number;
   now?: () => number;
+  /** Time between hands turning over at the round's end. */
+  revealStagger?: number;
 }
 
 const clock = () => performance.now();
@@ -36,6 +40,7 @@ export function useCambioMotion(view: CambioHostView, opts: MotionOptions = {}):
   const reduced = opts.reduced ?? prefersReduced;
   const timeScale = opts.timeScale ?? 1;
   const now = opts.now ?? clock;
+  const revealStagger = opts.revealStagger;
 
   const queue = useRef<MotionQueue | null>(null);
   const cursor = useRef<LogCursor | null>(null);
@@ -61,12 +66,12 @@ export function useCambioMotion(view: CambioHostView, opts: MotionOptions = {}):
       tail.current = truth;
       return;
     }
-    const { steps } = stepsFor(tail.current!, events);
+    const { steps } = stepsFor(tail.current!, events, { revealStagger });
     // The real state is authoritative: the next events build on it, not on our model of it.
     tail.current = truth;
     q.push(steps, truth);
     rerender();
-  }, [view, q]);
+  }, [view, q, revealStagger]);
 
   useEffect(() => {
     const wait = q.nextWakeIn();
@@ -86,5 +91,6 @@ export function useCambioMotion(view: CambioHostView, opts: MotionOptions = {}):
     timeScale,
     backlog: q.backlog(),
     collapsed: q.collapsed,
+    pending: q.pending.length,
   };
 }

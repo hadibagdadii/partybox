@@ -1,27 +1,38 @@
-import { theme, type CambioPlayerView } from '@partybox/cambio';
+import { theme } from '@partybox/cambio';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useMemo } from 'react';
-import { posesFor, type PhoneLayout } from '../motion/layout';
+import { posesFor, type TableLayout } from '../motion/layout';
 import type { MotionFrame } from '../motion/useCambioMotion';
 import { CARD_RATIO, colors, ease } from '../tokens';
 import { EyeIcon } from './ui';
 
+/** Marker sizes: a phone held in the hand, or a TV read from across the room. */
+const SIZES = {
+  phone: { eyeMin: 18, eyeMax: 26, captionW: 150, font: 12, line: 16, gap: 6 },
+  tv: { eyeMin: 52, eyeMax: 64, captionW: 460, font: 30, line: 38, gap: 12 },
+} as const;
+
 /**
  * While someone else peeks at a card, an eye on that card and who is looking. It follows the
- * public scene (the peek event, then the peeker's turn), so it shows the same moment the TV
- * does. It never draws a face: the card under it stays face down.
+ * public scene (the peek event, then the peeker's turn), so the phone and the TV show the same
+ * moment. It never draws a face: the card under it stays face down.
  */
 export function PeekMarker({
-  view,
+  players,
+  viewerId,
   layout,
   frame,
+  size = 'phone',
 }: {
-  view: CambioPlayerView;
-  layout: PhoneLayout;
+  players: readonly { id: string; name: string }[];
+  /** Your own peeks get no marker; the TV passes null, so every peek is marked. */
+  viewerId: string | null;
+  layout: TableLayout;
   frame: MotionFrame;
+  size?: keyof typeof SIZES;
 }) {
   const reduced = useReducedMotion();
-  const me = view.you?.id;
+  const me = viewerId;
   const { scene } = frame;
   const peek = scene.peek;
   const target = useMemo(() => {
@@ -34,7 +45,7 @@ export function PeekMarker({
     }
     return null;
   }, [peek, me, scene, layout]);
-  const peeker = peek ? view.players.find((p) => p.id === peek.playerId)?.name : undefined;
+  const peeker = peek ? players.find((p) => p.id === peek.playerId)?.name : undefined;
 
   return (
     <AnimatePresence>
@@ -47,9 +58,10 @@ export function PeekMarker({
           x={target.pose.x}
           y={target.pose.y}
           w={target.pose.scale * layout.spriteWidth}
-          above={target.ownerId === me}
+          above={size === 'tv' ? target.pose.y > layout.height / 2 : target.ownerId === me}
           screenW={layout.width}
           reduced={!!reduced}
+          dims={SIZES[size]}
         />
       )}
     </AnimatePresence>
@@ -66,6 +78,7 @@ function PeekBadge({
   above,
   screenW,
   reduced,
+  dims,
 }: {
   cardId: string;
   peekerId: string;
@@ -77,10 +90,11 @@ function PeekBadge({
   above: boolean;
   screenW: number;
   reduced: boolean;
+  dims: (typeof SIZES)[keyof typeof SIZES];
 }) {
   const h = w * CARD_RATIO;
-  const eye = Math.max(18, Math.min(26, w * 0.6));
-  const captionW = 150;
+  const eye = Math.max(dims.eyeMin, Math.min(dims.eyeMax, w * 0.6));
+  const captionW = dims.captionW;
   const left = Math.min(Math.max(x - captionW / 2, 8), screenW - captionW - 8);
   return (
     <motion.div
@@ -112,11 +126,18 @@ function PeekBadge({
       </span>
       <span
         className="absolute flex justify-center"
-        style={{ left, width: captionW, top: above ? y - h / 2 - 30 : y + h / 2 + 6 }}
+        style={{
+          left,
+          width: captionW,
+          top: above ? y - h / 2 - dims.line - dims.gap * 2 : y + h / 2 + dims.gap,
+        }}
       >
         <span
-          className="truncate rounded-full px-2 py-0.5 font-card text-[12px] font-semibold leading-4"
+          className="truncate rounded-full font-card font-semibold"
           style={{
+            fontSize: dims.font,
+            lineHeight: `${dims.line}px`,
+            padding: `${dims.line * 0.06}px ${dims.font * 0.6}px`,
             color: colors.ink,
             background: colors.glow,
             boxShadow: '0 6px 14px -6px rgba(0,0,0,.7)',

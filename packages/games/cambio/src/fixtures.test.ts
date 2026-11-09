@@ -20,6 +20,12 @@ const shows: Record<FixtureId, CambioEventType> = {
   reveal: 'roundRevealed',
   burst: 'snapped',
   holes: 'snapFailed',
+  chain: 'snapped',
+  wrongSnapOther: 'snapFailed',
+  lockedCall: 'cambioCalled',
+  peekPhase: 'ready',
+  matchRoundEnd: 'roundRevealed',
+  gameOver: 'gameOver',
 };
 
 describe.each([6, 12])('fixtures on a %i-player table', (count) => {
@@ -42,5 +48,39 @@ describe.each([6, 12])('fixtures on a %i-player table', (count) => {
     const types = f.steps.flatMap((s) => s.events.map((e) => e.type));
     expect(types.length).toBeGreaterThanOrEqual(25);
     expect(types).toContain('snapFailed');
+  });
+});
+
+describe('fixtures for the TV moments', () => {
+  it('chains three snaps on one discard', () => {
+    const f = buildFixture('chain', 6);
+    expect(f.steps.map((s) => s.events.map((e) => e.type))).toEqual([
+      ['snapped'],
+      ['snapped'],
+      ['snapped'],
+    ]);
+  });
+
+  it('a wrong snap of another player puts the penalty on the snapper', () => {
+    const f = buildFixture('wrongSnapOther', 6);
+    const e = f.steps[0]!.events[0]!;
+    expect(e).toMatchObject({ type: 'snapFailed', snapperId: 'p2', ownerId: 'p1' });
+  });
+
+  it('a locked call keeps the caller locked', () => {
+    const f = buildFixture('lockedCall', 6);
+    expect(f.steps.at(-1)!.host.lockedPlayerId).toBe('p0');
+  });
+
+  it('the match round ends near the target without ending the match', () => {
+    const f = buildFixture('matchRoundEnd', 12);
+    const host = f.steps.at(-1)!.host;
+    expect(host.phase).toBe('roundOver');
+    expect(Math.max(...Object.values(host.totals))).toBeGreaterThan(60);
+    expect(Math.max(...Object.values(host.totals))).toBeLessThan(100);
+  });
+
+  it('a single round ends the game', () => {
+    expect(buildFixture('gameOver', 6).steps.at(-1)!.host.phase).toBe('over');
   });
 });

@@ -86,6 +86,43 @@ describe('theme', () => {
   });
 });
 
+describe('TV and herald copy', () => {
+  it('fills in counts, names, and the match target', () => {
+    for (const [key, v] of Object.entries(theme.tv)) {
+      const arg = key === 'leading' ? ['Amina'] : 'Amina';
+      const text = typeof v === 'function' ? (v as (...a: unknown[]) => string)(arg, 2) : v;
+      expect(text, key).toBeTruthy();
+    }
+    expect(theme.tv.finalTurns(3)).toBe('3 final turns');
+    expect(theme.tv.finalTurns(1)).toBe('1 final turn');
+    expect(theme.tv.chain(3)).toBe('×3');
+    expect(theme.tv.leading(['Amina'])).toBe('Leading: Amina');
+    expect(theme.tv.leading(['Amina', 'Bot 3'])).toBe('Leading: Amina and Bot 3');
+    expect(theme.tv.closestTo('Bot 3', 100)).toBe('Bot 3 is closest to 100');
+    expect(theme.tv.playingTo(100)).toBe('Playing to 100');
+  });
+
+  it('herald lines are short sentences', () => {
+    const lines = [
+      theme.herald.ready,
+      theme.herald.turn('Amina'),
+      theme.herald.called('Amina'),
+      theme.herald.snapped('Amina'),
+      theme.herald.wrongSnap('Amina'),
+      theme.herald.roundWinner(['Amina'], 4),
+      theme.herald.roundWinner(['Amina', 'Yusuf'], -1),
+      theme.herald.gameWinner(['Amina']),
+    ];
+    for (const line of lines) {
+      expect(line).toMatch(/^[A-Z].*[.!]$/);
+      expect(line.split(' ').length).toBeLessThanOrEqual(10);
+    }
+    expect(theme.herald.roundWinner(['Amina', 'Yusuf'], 2)).toBe(
+      'Amina and Yusuf take the round with 2.',
+    );
+  });
+});
+
 describe('strings that take a name read right when the name is You', () => {
   it('the winner line never says "You wins"', () => {
     const { winnerLine } = theme.results;

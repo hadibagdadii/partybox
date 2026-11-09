@@ -20,9 +20,8 @@ export const card = (rank: Rank, suit: Suit = 'spades'): Face => ({
 export const fillers = (count: number, rank: Rank = '2'): Face[] =>
   Array.from({ length: count }, () => card(rank));
 
-export interface Setup {
-  count?: number;
-  seed?: number;
+/** How to stack a game: known hands, deck and discard, and whose turn it is. */
+export interface Stack {
   options?: Partial<CambioOptions>;
   /** Replaces each listed player's hand with these faces, in slot order. */
   hands?: (Face[] | undefined)[];
@@ -38,11 +37,19 @@ export interface Setup {
   played?: boolean;
 }
 
-/** A scripted game: known hands, a stacked deck and discard, and a chosen first player. */
-export function makeGame(opts: Setup = {}): CambioState {
-  const count = opts.count ?? 3;
-  const seats = Array.from({ length: count }, (_, i) => ({ id: pid(i), name: `Player ${i}` }));
-  const s = createInitialState(seats, createRng(opts.seed ?? 1), opts.options ?? {});
+export interface Setup extends Stack {
+  count?: number;
+  seed?: number;
+}
+
+/**
+ * A copy of `state` with stacked hands, deck and discard, and a chosen player to move. Keeps the
+ * state's own seats, so it also stacks a game started for real seat ids (the server e2e tests).
+ * New cards get fresh ids, like any deck.
+ */
+export function stackGame(state: CambioState, opts: Stack = {}): CambioState {
+  const s = structuredClone(state);
+  if (opts.options) s.options = { ...s.options, ...opts.options };
   const rng = createRng(12345);
   opts.hands?.forEach((faces, i) => {
     if (!faces) return;
@@ -52,14 +59,22 @@ export function makeGame(opts: Setup = {}): CambioState {
   });
   s.deck = assignCardIds(s, opts.deck ?? fillers(20), rng);
   if (opts.discard) s.discard = assignCardIds(s, opts.discard, rng);
-  const first = opts.first ?? 0;
-  s.turn = { playerId: pid(first), stage: 'start', drawn: null, power: null, peek: null };
+  const first = s.players[opts.first ?? 0]!.id;
+  s.turn = { playerId: first, stage: 'start', drawn: null, power: null, peek: null };
+  s.memory = {};
   if (!opts.peek) {
     s.phase = 'play';
     s.readyIds = s.players.map((p) => p.id);
   }
   if (opts.played) for (const p of s.players) s.completedTurns[p.id] = 1;
   return s;
+}
+
+/** A scripted game on seats p0..p(n-1): see `stackGame`. */
+export function makeGame(opts: Setup = {}): CambioState {
+  const count = opts.count ?? 3;
+  const seats = Array.from({ length: count }, (_, i) => ({ id: pid(i), name: `Player ${i}` }));
+  return stackGame(createInitialState(seats, createRng(opts.seed ?? 1), opts.options ?? {}), opts);
 }
 
 export function attempt(

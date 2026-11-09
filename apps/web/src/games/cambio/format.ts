@@ -26,3 +26,16 @@ export const optionSummary = (o: CambioHostView['options']): string =>
   ]
     .filter(Boolean)
     .join(' · ');
+
+/**
+ * Turns left after Cambio: everyone from the current player up to (not including) the caller.
+ * Zero when nobody has called or the round is not in play.
+ */
+export function turnsLeft(view: Pick<CambioHostView, 'players' | 'turn' | 'callerId'>): number {
+  if (!view.callerId || !view.turn) return 0;
+  const order = view.players.map((p) => p.id);
+  const caller = order.indexOf(view.callerId);
+  const current = order.indexOf(view.turn.playerId);
+  if (caller < 0 || current < 0) return 0;
+  return (caller - current + order.length) % order.length;
+}

@@ -46,6 +46,9 @@ export function Dev() {
         <a href="/dev/cambio-cards" className="text-amber-400 underline">
           Cambio cards
         </a>
+        <a href="/dev/cambio-host" className="text-amber-400 underline">
+          Cambio TV scenes
+        </a>
       </header>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4">
         {Array.from({ length: n }, (_, i) => i + 1).map((slot) => (
