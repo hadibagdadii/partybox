@@ -88,7 +88,7 @@ describe('steps', () => {
     const snapper = scene.seats.find((x) => x.playerId === e.snapperId)!;
     expect(snapper.slots.some((x) => x.slotId === e.give!.slotId)).toBe(false);
     expect(step.kind).toBe('snapGive');
-    expect(step.moves.map((m) => m.path)).toEqual(['slam', 'spring']);
+    expect(step.moves.map((m) => m.path)).toEqual(['slam', 'arc']);
     expect(step.effects.map((x) => x.kind)).toEqual(['impact', 'pileShake']);
   });
 

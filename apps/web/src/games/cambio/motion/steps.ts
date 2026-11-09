@@ -91,6 +91,17 @@ function pushDiscard(s: Scene, card: { cardId: string; face: Face }): void {
   s.discardCount += 1;
 }
 
+/** A card leaving a hand for the discard turns face up partway through its flight. */
+function flipInFlight(card: { cardId: string; face: Face }, move: CardMove): CardFlip {
+  return {
+    cardId: card.cardId,
+    face: { ...card.face },
+    rotateY: [180, 0],
+    delay: move.delay + move.duration * 0.4,
+    duration: timing.flip,
+  };
+}
+
 /** Stagger between dealt cards: at most 60 ms, less on big tables so a deal stays near 1.4 s. */
 export const dealStagger = (cards: number): number =>
   Math.min(timing.dealStaggerMax, timing.dealSpread / Math.max(cards, 1));
@@ -193,32 +204,44 @@ export function applyEvent(prev: Scene, event: CambioEvent): { scene: Scene; ste
       if (at) at.slot.cardId = event.cardId;
       s.drawn = null;
       pushDiscard(s, event.discarded);
+      const out: CardMove = {
+        cardId: old,
+        path: 'arc',
+        delay: 60,
+        duration: timing.exitArc,
+        bend: 1,
+      };
       return done({
         kind: 'swap',
         duration: Math.max(timing.slide, 60 + timing.exitArc + timing.flip / 2),
-        moves: [
-          { cardId: event.cardId, path: 'spring', delay: 0, duration: timing.slide },
-          { cardId: old, path: 'arc', delay: 60, duration: timing.exitArc, bend: 1 },
-        ],
+        moves: [{ cardId: event.cardId, path: 'spring', delay: 0, duration: timing.slide }, out],
+        flips: [flipInFlight({ cardId: old, face: event.discarded.face }, out)],
       });
     }
 
     case 'discardedDrawn': {
       s.drawn = null;
       pushDiscard(s, event.card);
+      const out: CardMove = {
+        cardId: event.card.cardId,
+        path: 'arc',
+        delay: 0,
+        duration: timing.exitArc,
+        bend: -1,
+      };
       return done({
         kind: 'discard',
         duration: timing.exitArc + timing.flip / 2,
-        moves: [
-          { cardId: event.card.cardId, path: 'arc', delay: 0, duration: timing.exitArc, bend: -1 },
-        ],
+        moves: [out],
+        flips: [flipInFlight(event.card, out)],
       });
     }
 
     case 'powerUsed':
     case 'kingPeek': {
       s.peek = { playerId: event.playerId, slotId: event.target.slotId };
-      return done({ kind: 'peek', duration: timing.peek, touched: [event.target.cardId] });
+      // Lifts over `timing.peek`, then holds so everyone sees which card was looked at.
+      return done({ kind: 'peek', duration: timing.peekHold, touched: [event.target.cardId] });
     }
 
     case 'blindSwap':
@@ -242,19 +265,25 @@ export function applyEvent(prev: Scene, event: CambioEvent): { scene: Scene; ste
 
     case 'snapped': {
       const at = findSlot(s, event.slotId);
-      const moves: CardMove[] = [
-        { cardId: event.card.cardId, path: 'slam', delay: 0, duration: timing.snapFlight },
-      ];
+      const slam: CardMove = {
+        cardId: event.card.cardId,
+        path: 'slam',
+        delay: 0,
+        duration: timing.snapFlight,
+      };
+      const moves: CardMove[] = [slam];
       if (event.give) {
         const given = findSlot(s, event.give.slotId);
         if (given) given.seat.slots.splice(given.index, 1);
         const target = findSlot(s, event.slotId);
         if (target) target.slot.cardId = event.give.cardId;
+        // Crosses visibly from the snapper's hand into the owner's hole.
         moves.push({
           cardId: event.give.cardId,
-          path: 'spring',
+          path: 'arc',
           delay: timing.snapFlight - 80,
           duration: timing.give,
+          bend: -1,
         });
       } else if (at) {
         at.seat.slots.splice(at.index, 1);
@@ -268,6 +297,7 @@ export function applyEvent(prev: Scene, event: CambioEvent): { scene: Scene; ste
         kind: event.give ? 'snapGive' : 'snap',
         duration: event.give ? timing.snapFlight - 80 + timing.give : timing.snapFlight + 160,
         moves,
+        flips: [flipInFlight(event.card, slam)],
         effects,
       });
     }

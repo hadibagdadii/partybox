@@ -38,6 +38,9 @@ interface Item {
   mount: Pose;
   /** Was in a hand last frame and left the scene: sweeps back to the deck. */
   leaving?: boolean;
+  /** Where the card rests: its hand slot and owner. Public, for tests and the peek marker. */
+  slotId?: string;
+  ownerId?: string;
 }
 
 /** Motion transform values for a pose. */
@@ -49,6 +52,10 @@ const values = (p: Pose) => ({
   rotateX: p.rotateX ?? 0,
   rotateY: p.rotateY ?? 0,
 });
+
+/** The same pose as an inline transform, for writes outside Motion. */
+const transformOf = (p: Pose) =>
+  `translateX(${p.x}px) translateY(${p.y}px) scale(${p.scale}) rotate(${p.rotate}deg) rotateX(${p.rotateX ?? 0}deg) rotateY(${p.rotateY ?? 0}deg)`;
 
 const samePose = (a: Pose, b: Pose) =>
   a.x === b.x &&
@@ -116,11 +123,18 @@ function runMove(
 ): AnimationPlaybackControls[] {
   const delay = (move.delay * k) / 1000;
   const duration = (move.duration * k) / 1000;
-  if (move.path === 'spring') {
-    return [animate(el, values(to), { ...springs.slide, duration, delay })];
-  }
-  const frames = arcKeyframes(from, to, move.bend ?? 1, move.path === 'slam');
-  return [animate(el, frames, { duration, delay, ease: 'linear' })];
+  const run =
+    move.path === 'spring'
+      ? animate(el, values(to), { ...springs.slide, duration, delay })
+      : animate(el, arcKeyframes(from, to, move.bend ?? 1, move.path === 'slam'), {
+          duration,
+          delay,
+          ease: 'linear',
+        });
+  // Motion writes the end pose at once and only draws the start on its next frame, which can be
+  // a delay or a busy commit away: the card would flash at its destination first.
+  el.style.transform = transformOf(from);
+  return [run];
 }
 
 /** A small horizontal shake around the card's rest position. */
@@ -180,15 +194,25 @@ export function CardLayer({
     const movesById = new Map(step?.moves.map((m) => [m.cardId, m]));
     const { youId, privateFaces, handFaces = {} } = perspective;
     const discardIds = new Set(scene.discard.map((c) => c.cardId));
+    const wasFaceUp = new Set(lastItems.current.filter((i) => i.faceUp).map((i) => i.cardId));
     scene.discard.forEach((c, i) => {
       const pose = poses.get(c.cardId)!;
+      // A card thrown face down turns over in flight; one you already saw face up stays up.
+      const f = wasFaceUp.has(c.cardId) ? undefined : flips.get(c.cardId);
       out.push({
         cardId: c.cardId,
         pose,
         mount: pose,
         face: c.face,
         faceUp: true,
-        flip: null,
+        flip: f
+          ? {
+              rotateY: f.rotateY,
+              times: f.times,
+              duration: (f.duration * k) / 1000,
+              delay: (f.delay * k) / 1000,
+            }
+          : null,
         lifted: false,
         z: 10 + i,
       });
@@ -221,6 +245,8 @@ export function CardLayer({
             : null,
           lifted: peeking || !!(own && handFaces[slot.cardId]),
           z: peeking ? 60 : 20,
+          slotId: slot.slotId,
+          ownerId: seat.playerId,
         });
       }
     }
@@ -322,7 +348,15 @@ export function CardLayer({
           if (el && rest)
             track(
               el,
-              runShake(el, rest, layout.spriteWidth * rest.scale * 0.12, fx.delay, fx.duration, k),
+              runShake(
+                el,
+                rest,
+                // A floor, so a mini card's shake still reads on a phone.
+                Math.max(3, layout.spriteWidth * rest.scale * 0.12),
+                fx.delay,
+                fx.duration,
+                k,
+              ),
             );
         }
         if (fx.kind === 'pileShake') {
@@ -460,6 +494,8 @@ function spriteEqual(a: SpriteProps, b: SpriteProps): boolean {
     a.item.faceUp === b.item.faceUp &&
     a.item.lifted === b.item.lifted &&
     a.item.z === b.item.z &&
+    a.item.slotId === b.item.slotId &&
+    a.item.ownerId === b.item.ownerId &&
     sameFace(a.item.face, b.item.face) &&
     sameFlip(a.item.flip, b.item.flip)
   );
@@ -483,13 +519,14 @@ const Sprite = memo(function Sprite({
         }
         if (!el.dataset.placed) {
           // Placed once per element, before paint; Motion owns the transform from then on.
-          const p = item.mount;
-          el.style.transform = `translateX(${p.x}px) translateY(${p.y}px) scale(${p.scale}) rotate(${p.rotate}deg)`;
+          el.style.transform = transformOf(item.mount);
           el.dataset.placed = '';
         }
         nodes.set(id, el);
       }}
       data-card-id={item.cardId}
+      data-slot-id={item.slotId}
+      data-owner={item.ownerId}
       style={{
         position: 'absolute',
         left: -spriteW / 2,

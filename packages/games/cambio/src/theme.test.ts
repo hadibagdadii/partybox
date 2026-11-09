@@ -85,3 +85,34 @@ describe('theme', () => {
     expect(theme.phone.tooLate).toBe('Too late');
   });
 });
+
+describe('strings that take a name read right when the name is You', () => {
+  it('the winner line never says "You wins"', () => {
+    const { winnerLine } = theme.results;
+    expect(winnerLine('game', [], true)).toBe('You win!');
+    expect(winnerLine('game', [], true)).toBe(theme.results.youWin);
+    expect(winnerLine('round', [], true)).toBe(theme.results.youWinRound);
+    expect(winnerLine('game', ['Bot 2'], true)).toBe('You and Bot 2 win the game.');
+    expect(winnerLine('round', ['Bot 1', 'Bot 2'], true)).toBe(
+      'You, Bot 1 and Bot 2 win the round.',
+    );
+    expect(winnerLine('game', ['Bot 2'], false)).toBe('Bot 2 wins the game.');
+    for (const kind of ['round', 'game'] as const) {
+      for (const others of [[], ['Bot 1'], ['Bot 1', 'Bot 2']]) {
+        expect(winnerLine(kind, others, true)).not.toMatch(/You wins/);
+      }
+    }
+  });
+
+  it('every phone template with a name has its own you-string, or is only used for others', () => {
+    // Used with your own id instead: youCalled, yourCard, yourTurn, and no peek marker at all.
+    expect(theme.phone.youCalled).toBe('You called Cambio');
+    expect(theme.phone.yourCard(1)).toBe('Your card 1');
+    expect(theme.phone.yourTurn).toBe('Your turn');
+    // Only ever called with another player's name, so they read as third person.
+    expect(theme.phone.called('Bot 1')).toBe('Bot 1 called Cambio');
+    expect(theme.phone.turnOf('Bot 1')).toBe("Bot 1's turn");
+    expect(theme.phone.peekedBy('Bot 1')).toBe('Bot 1 looked at this');
+    expect(theme.phone.miniHand('Bot 1', 4, true)).toBe('Bot 1, 4 cards, their turn');
+  });
+});

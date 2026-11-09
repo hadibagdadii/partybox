@@ -2,6 +2,7 @@ import {
   cambioModule,
   optionsSchema,
   theme,
+  type CambioEvent,
   type CambioPlayerView,
   type CambioState,
 } from '@partybox/cambio';
@@ -10,6 +11,8 @@ import { createRng, type LobbyView } from '@partybox/shared';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { ActResult } from '../../registry';
+import { handCols, phoneLayout, posesFor } from '../motion/layout';
+import { sceneFromView } from '../motion/scene';
 import { CambioPhone, PEEK_SHOW_MS } from './CambioPhone';
 
 const W = 375;
@@ -419,4 +422,302 @@ describe('the phone never renders a face it may not see', () => {
     },
     60_000,
   );
+
+  it('with phones kept mounted through whole games, mid-motion included', () => {
+    // Each phone stays mounted and sees every broadcast, so its motion queue plays the table:
+    // flips, peeks, swaps, and snaps on the mini hands. No frame may show a private face.
+    const rng = createRng(2024);
+    let checks = 0;
+    for (let game = 0; game < 4; game++) {
+      let s: CambioState = cambioModule.createInitialState(
+        seats,
+        rng,
+        optionsSchema.parse({
+          scoringMode: 'match',
+          matchTarget: 30,
+          rememberPeeks: game % 2 === 1,
+        }),
+      );
+      // Ids that were ever public this game: a lagging scene may still draw one a moment longer.
+      const everPublic = new Set<string>();
+      const first = cambioModule.getHostView(s).topDiscard;
+      if (first) everPublic.add(first.cardId);
+      const phones = new Map<string, HTMLElement>();
+      const renders = new Map<string, ReturnType<typeof render>>();
+      for (const p of seats) {
+        const holder = document.createElement('div');
+        document.body.appendChild(holder);
+        phones.set(p.id, holder);
+      }
+      const show = (id: string, v: CambioPlayerView) => {
+        const props = {
+          room: room(v),
+          you: { id, name: id, isVip: false },
+          act: async () => ({ ok: true }) as ActResult,
+          seatKey: 'k',
+          reset: null,
+          playAgain: null,
+        };
+        const el = <CambioPhone {...props} game={v} />;
+        const r = renders.get(id);
+        if (r) r.rerender(el);
+        else renders.set(id, render(el, { container: phones.get(id)! }));
+      };
+      for (let step = 0; step < 300 && !cambioModule.isOver(s); step++) {
+        for (const p of seats) {
+          const v = cambioModule.getPlayerView(s, p.id);
+          show(p.id, v);
+          const ok = allowed(v, everPublic);
+          const root = phones.get(p.id)!;
+          for (const el of root.querySelectorAll('[data-testid=card-layer] [data-card-id]')) {
+            if (!el.querySelector('[data-face]')) continue;
+            const id = el.getAttribute('data-card-id')!;
+            const owner = el.getAttribute('data-owner');
+            expect(ok.has(id), `${p.id} saw ${id} (in ${owner ?? 'a pile'}) at ${step}`).toBe(true);
+          }
+          for (const m of root.querySelectorAll('[data-testid=peek-marker]')) {
+            expect(m.querySelector('[data-face]')).toBeNull();
+            expect(m.getAttribute('data-peeker')).not.toBe(p.id);
+          }
+          checks += 1;
+        }
+        const moves = seats.flatMap((p) =>
+          (cambioModule.legalActions?.(s, p.id) ?? []).map((action) => ({
+            playerId: p.id,
+            action,
+          })),
+        );
+        const snaps = moves.filter((m) => m.action.type === 'snap');
+        const turns = moves.filter((m) => m.action.type !== 'snap');
+        const pool = snaps.length && (rng.int(5) === 0 || !turns.length) ? snaps : turns;
+        const r = cambioModule.reduce(s, pool[rng.int(pool.length)]!, rng);
+        if (!r.ok) throw new Error(r.error.message);
+        s = r.state;
+        for (const e of r.events) {
+          if (e.type === 'snapFailed' || e.type === 'snapped') everPublic.add(e.card.cardId);
+          if (e.type === 'swapped') everPublic.add(e.discarded.cardId);
+          if (e.type === 'discardedDrawn') everPublic.add(e.card.cardId);
+          if (e.type === 'dealt') everPublic.add(e.discard.cardId);
+          if (e.type === 'roundRevealed')
+            for (const h of e.result.hands) for (const c of h.cards) everPublic.add(c.cardId);
+        }
+      }
+      cleanup();
+    }
+    expect(checks).toBeGreaterThan(400);
+  }, 60_000);
+});
+
+// ---- The table on the phone: other players' mini hands ----
+
+type Played = { before: CambioState; after: CambioState; events: CambioEvent[] };
+
+/**
+ * Plays a seeded random game, preferring powers, until a broadcast matches `want`. Returns the
+ * states either side of it, so a test can show the phone the moment it happens.
+ */
+function playUntil(
+  want: (events: CambioEvent[]) => boolean,
+  opts: { players?: number; seed?: number } = {},
+): Played {
+  const seats = Array.from({ length: opts.players ?? 4 }, (_, i) => ({
+    id: 'abcdefghijkl'[i]!,
+    name: `Bot ${i}`,
+  }));
+  const rng = createRng(opts.seed ?? 5);
+  for (let game = 0; game < 40; game++) {
+    let s: CambioState = cambioModule.createInitialState(seats, rng, optionsSchema.parse({}));
+    for (let step = 0; step < 500 && !cambioModule.isOver(s); step++) {
+      const moves = seats.flatMap((p) =>
+        (cambioModule.legalActions?.(s, p.id) ?? []).map((action) => ({ playerId: p.id, action })),
+      );
+      const powers = moves.filter((m) => ['peek', 'blindSwap', 'kingSwap'].includes(m.action.type));
+      const snaps = moves.filter((m) => m.action.type === 'snap');
+      const turns = moves.filter((m) => m.action.type !== 'snap');
+      const pool = powers.length
+        ? powers
+        : snaps.length && (rng.int(4) === 0 || !turns.length)
+          ? snaps
+          : turns;
+      const r = cambioModule.reduce(s, pool[rng.int(pool.length)]!, rng);
+      if (!r.ok) throw new Error(r.error.message);
+      if (want(r.events)) return { before: s, after: r.state, events: r.events };
+      s = r.state;
+    }
+  }
+  throw new Error('no such moment in 40 games');
+}
+
+const sprite = (cardId: string) =>
+  document.querySelector<HTMLElement>(`[data-testid=card-layer] [data-card-id="${cardId}"]`)!;
+const spriteX = (cardId: string) =>
+  Number(/translateX\(([-\d.]+)px\)/.exec(sprite(cardId).style.transform)?.[1]);
+
+describe('the table on the phone', () => {
+  it('shows every other player as a mini hand, two rows for 11 others', () => {
+    const p = playUntil((e) => e.some((x) => x.type === 'turnStarted'), { players: 12 });
+    const view = cambioModule.getPlayerView(p.after, 'a');
+    mount(view);
+    const minis = [...document.querySelectorAll('li[data-testid^="mini-"]')];
+    expect(minis).toHaveLength(11);
+    expect(new Set(minis.map((m) => m.getAttribute('data-row')))).toEqual(new Set(['0', '1']));
+    // Each of their cards rests face down in its own hand, at a readable size.
+    for (const other of view.players.filter((x) => x.id !== 'a')) {
+      for (const s of other.slots) {
+        const el = sprite(s.cardId);
+        expect(el.getAttribute('data-owner')).toBe(other.id);
+        expect(el.getAttribute('data-slot-id')).toBe(s.slotId);
+      }
+    }
+  });
+
+  it.each([
+    ['a third player', (owner: string, peeker: string) => owner !== 'a' && peeker !== 'a'],
+    ['you', (owner: string, peeker: string) => owner === 'a' && peeker !== 'a'],
+  ])("someone else's peek at %s's card: the eye and their name on that card", (_, which) => {
+    const p = playUntil((events) =>
+      events.some(
+        (e) =>
+          (e.type === 'powerUsed' || e.type === 'kingPeek') && which(e.target.playerId, e.playerId),
+      ),
+    );
+    const e = p.events.find((x) => x.type === 'powerUsed' || x.type === 'kingPeek')!;
+    if (e.type !== 'powerUsed' && e.type !== 'kingPeek') throw new Error('expected a peek');
+    const { rerender } = mount(cambioModule.getPlayerView(p.before, 'a'));
+    expect(screen.queryByTestId('peek-marker')).toBeNull();
+    const after = cambioModule.getPlayerView(p.after, 'a');
+    rerender(after);
+    const marker = screen.getByTestId('peek-marker');
+    expect(marker.getAttribute('data-card-id')).toBe(e.target.cardId);
+    expect(marker.getAttribute('data-peeker')).toBe(e.playerId);
+    const name = after.players.find((x) => x.id === e.playerId)!.name;
+    expect(marker.textContent).toBe(theme.phone.peekedBy(name));
+    expect(marker.querySelector('[data-face]')).toBeNull();
+    // The peeked card itself stays face down for you.
+    expect(faceUpIds()).not.toContain(e.target.cardId);
+    expect(sprite(e.target.cardId).getAttribute('data-owner')).toBe(e.target.playerId);
+  });
+
+  it('your own peek shows no marker: you see the face instead', () => {
+    const p = playUntil((events) =>
+      events.some((e) => e.type === 'powerUsed' && e.playerId === 'a' && e.power === 'peekOther'),
+    );
+    const { rerender } = mount(cambioModule.getPlayerView(p.before, 'a'));
+    rerender(cambioModule.getPlayerView(p.after, 'a'));
+    expect(screen.queryByTestId('peek-marker')).toBeNull();
+  });
+
+  it.each([
+    [
+      'between two other players',
+      (e: { a: { playerId: string }; b: { playerId: string } }) =>
+        e.a.playerId !== 'a' && e.b.playerId !== 'a',
+    ],
+    [
+      'with your hand',
+      (e: { a: { playerId: string }; b: { playerId: string } }) =>
+        e.a.playerId === 'a' || e.b.playerId === 'a',
+    ],
+  ])('a blind swap %s ends with the right cards in the right slots', (_, which) => {
+    vi.useFakeTimers();
+    const isSwap = (x: CambioEvent) =>
+      (x.type === 'blindSwap' || x.type === 'kingSwap') && which(x);
+    const p = playUntil((events) => events.some(isSwap), { seed: 11 });
+    const e = p.events.find(isSwap)!;
+    if (e.type !== 'blindSwap' && e.type !== 'kingSwap') throw new Error('expected a swap');
+    const { rerender } = mount(cambioModule.getPlayerView(p.before, 'a'));
+    expect(sprite(e.a.cardId).getAttribute('data-slot-id')).toBe(e.a.slotId);
+    rerender(cambioModule.getPlayerView(p.after, 'a'));
+    act(() => void vi.advanceTimersByTime(2000));
+    expect(sprite(e.a.cardId).getAttribute('data-slot-id')).toBe(e.b.slotId);
+    expect(sprite(e.a.cardId).getAttribute('data-owner')).toBe(e.b.playerId);
+    expect(sprite(e.b.cardId).getAttribute('data-slot-id')).toBe(e.a.slotId);
+    expect(sprite(e.b.cardId).getAttribute('data-owner')).toBe(e.a.playerId);
+    expect(faceUpIds()).not.toContain(e.a.cardId);
+    expect(faceUpIds()).not.toContain(e.b.cardId);
+  });
+
+  it("a card swapped out of another player's hand starts its flight from that hand", () => {
+    vi.useFakeTimers();
+    const p = playUntil((events) => events.some((e) => e.type === 'swapped' && e.playerId !== 'a'));
+    const e = p.events.find((x) => x.type === 'swapped')!;
+    if (e.type !== 'swapped') throw new Error('expected a swap');
+    const { rerender } = mount(cambioModule.getPlayerView(p.before, 'a'));
+    const out = e.discarded.cardId;
+    const before = sprite(out).style.transform;
+    rerender(cambioModule.getPlayerView(p.after, 'a'));
+    // Same frame as the step starts: still in the hand, not already on the discard.
+    expect(sprite(out).getAttribute('data-owner')).toBeNull();
+    expect(sprite(out).style.transform.split(' ').slice(0, 2)).toEqual(
+      before.split(' ').slice(0, 2),
+    );
+  });
+
+  it('a penalty card starts on the deck, not already in the hand', () => {
+    vi.useFakeTimers();
+    const p = playUntil((events) =>
+      events.some((e) => e.type === 'snapFailed' && e.snapperId !== 'a' && e.penalty !== null),
+    );
+    const e = p.events.find((x) => x.type === 'snapFailed')!;
+    if (e.type !== 'snapFailed' || !e.penalty) throw new Error('expected a penalty');
+    const { rerender } = mount(cambioModule.getPlayerView(p.before, 'a'));
+    const after = cambioModule.getPlayerView(p.after, 'a');
+    rerender(after);
+    const scene = sceneFromView(after);
+    const cols = Object.fromEntries(
+      scene.seats.map((s) => [s.playerId, handCols(s.slots.map((x) => x.pos))]),
+    );
+    const { deck } = phoneLayout(
+      W,
+      H,
+      after.players.map((x) => x.id),
+      'a',
+      cols,
+    );
+    expect(spriteX(e.penalty.cardId)).toBeCloseTo(deck.x, 0);
+  });
+
+  it('when a penalty widens a hand, every mini card settles into the new layout', async () => {
+    // A wrong snap by someone else whose penalty opens a new column: every hand box shifts.
+    const p = playUntil((events) =>
+      events.some((e) => e.type === 'snapFailed' && e.snapperId !== 'a' && e.penalty?.pos === 4),
+    );
+    const { rerender } = mount(cambioModule.getPlayerView(p.before, 'a'));
+    const after = cambioModule.getPlayerView(p.after, 'a');
+    rerender(after);
+    // Real time: Motion's springs only advance on real frames.
+    await act(() => new Promise((r) => setTimeout(r, 2500)));
+    const scene = sceneFromView(after);
+    const cols = Object.fromEntries(
+      scene.seats.map((s) => [s.playerId, handCols(s.slots.map((x) => x.pos))]),
+    );
+    const layout = phoneLayout(
+      W,
+      H,
+      after.players.map((x) => x.id),
+      'a',
+      cols,
+    );
+    const poses = posesFor(scene, layout);
+    for (const seat of scene.seats.filter((s) => s.playerId !== 'a')) {
+      for (const slot of seat.slots) {
+        expect(spriteX(slot.cardId), `${seat.playerId} ${slot.slotId}`).toBeCloseTo(
+          poses.get(slot.cardId)!.x,
+          0,
+        );
+      }
+    }
+  });
+
+  it("the caller's mini hand gets the lock badge", () => {
+    const p = playUntil((events) =>
+      events.some((e) => e.type === 'cambioCalled' && e.playerId !== 'a'),
+    );
+    const e = p.events.find((x) => x.type === 'cambioCalled')!;
+    if (e.type !== 'cambioCalled') throw new Error('expected a call');
+    const { rerender } = mount(cambioModule.getPlayerView(p.before, 'a'));
+    expect(screen.queryByTestId(`lock-${e.playerId}`)).toBeNull();
+    rerender(cambioModule.getPlayerView(p.after, 'a'));
+    expect(screen.getByTestId(`lock-${e.playerId}`)).toBeTruthy();
+  });
 });

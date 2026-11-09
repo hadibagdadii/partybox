@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { loadConfig } from './config.js';
+import { DEFAULT_LIMITS, loadConfig } from './config.js';
 
 describe('loadConfig', () => {
   it('keeps dev tools and bot timing off in production even when the env asks for them', () => {
@@ -17,6 +17,17 @@ describe('loadConfig', () => {
     const { config } = loadConfig({ BOT_MIN_DELAY_MS: '100', BOT_MAX_DELAY_MS: '200' });
     expect(config.devTools).toBe(true);
     expect(config.bots).toEqual({ minDelayMs: 100, maxDelayMs: 200 });
+  });
+
+  it('raises the room cap and rate limits in development only', () => {
+    const dev = loadConfig({}).config;
+    expect(dev.maxRoomsPerIp).toBe(1000);
+    expect(dev.limits.createRoom.max).toBeGreaterThanOrEqual(1000);
+    expect(dev.limits.join.max).toBeGreaterThanOrEqual(5000);
+    expect(loadConfig({ MAX_ROOMS_PER_IP: '4' }).config.maxRoomsPerIp).toBe(4);
+    const prod = loadConfig({ NODE_ENV: 'production' }).config;
+    expect(prod.maxRoomsPerIp).toBe(3);
+    expect(prod.limits).toEqual(DEFAULT_LIMITS);
   });
 
   it('uses production defaults', () => {

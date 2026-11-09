@@ -36,9 +36,13 @@ export function RoundEnd({
       (result.scores[a] ?? 0) - (result.scores[b] ?? 0) ||
       order.indexOf(a) - order.indexOf(b),
   );
-  const headline = view.winners
-    ? theme.results.gameWinner(view.winners.map(name))
-    : theme.results.roundWinner(result.winners.map(name));
+  // "You win!", never "You wins": you are passed apart from the other winners.
+  const winnerIds = view.winners ?? result.winners;
+  const headline = theme.results.winnerLine(
+    view.winners ? 'game' : 'round',
+    winnerIds.filter((id) => id !== me).map(name),
+    winnerIds.includes(me),
+  );
   const top = layout.regions.strip.bottom + 6;
   const bottom = layout.height - layout.regions.hand.top + 6;
 

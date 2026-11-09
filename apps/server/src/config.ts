@@ -48,6 +48,16 @@ export const DEFAULT_LIMITS: ServerConfig['limits'] = {
   join: { max: 30, windowMs: 60 * 1000 },
 };
 
+/**
+ * Dev only: high enough that repeated local test runs (many rooms, many joins from one IP)
+ * never hit them. Production always uses `DEFAULT_LIMITS`.
+ */
+export const DEV_LIMITS: ServerConfig['limits'] = {
+  createRoom: { max: 1000, windowMs: 10 * 60 * 1000 },
+  join: { max: 5000, windowMs: 60 * 1000 },
+};
+export const DEV_MAX_ROOMS_PER_IP = 1000;
+
 type Env = Record<string, string | undefined>;
 
 /** Reads settings from the environment. Production never enables dev tools, whatever else is set. */
@@ -91,10 +101,10 @@ export function loadConfig(env: Env, defaults: { webDist?: string } = {}): Loade
         : { minDelayMs: botMs('BOT_MIN_DELAY_MS'), maxDelayMs: botMs('BOT_MAX_DELAY_MS') },
       allowedOrigin: env.ALLOWED_ORIGIN?.trim().replace(/\/+$/, '') || undefined,
       maxRooms: int('MAX_ROOMS', 200, 1),
-      maxRoomsPerIp: int('MAX_ROOMS_PER_IP', 3, 1),
+      maxRoomsPerIp: int('MAX_ROOMS_PER_IP', isProd ? 3 : DEV_MAX_ROOMS_PER_IP, 1),
       trustProxyHops: int('TRUST_PROXY_HOPS', isProd ? 1 : 0),
       clientIpHeader: env.CLIENT_IP_HEADER?.trim().toLowerCase() || undefined,
-      limits: DEFAULT_LIMITS,
+      limits: isProd ? DEFAULT_LIMITS : DEV_LIMITS,
       // In dev, Vite serves the web app and proxies /healthz and /socket.io here.
       webDist: isProd ? (env.WEB_DIST ?? defaults.webDist) : undefined,
       joinDisplayUrl: env.JOIN_DISPLAY_URL?.trim().replace(/\/+$/, '') || undefined,

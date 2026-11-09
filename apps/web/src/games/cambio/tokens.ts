@@ -76,6 +76,8 @@ export const timing = {
   exitArc: 320,
   arc: 440,
   peek: 300,
+  /** A peek holds, lifted toward the peeker, for about a second so everyone sees it. */
+  peekHold: 1000,
   snapFlight: 340,
   shake: 320,
   give: 340,

@@ -192,10 +192,26 @@ export function tableLayout(
   };
 }
 
+/** A rectangle in px within the layer. */
+export interface Box {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** One other player's mini hand on the phone: the whole box, its name line, and its cards. */
+export interface MiniHandBox extends Box {
+  playerId: string;
+  /** Top of the cards, under the name line. */
+  cardsTop: number;
+  row: number;
+}
+
 /** Regions of the phone screen the DOM overlays line up with. All px within the layer. */
 export interface PhoneRegions {
-  /** The other players' strip: chips centered on each seat's label point. */
-  strip: { bottom: number; chipW: number; chipH: number };
+  /** The other players' mini hands along the top. */
+  strip: { bottom: number; rows: number; miniW: number; hands: MiniHandBox[] };
   /** The Cambio banner's center line, just under the strip. */
   bannerY: number;
   /** Your hand's box; cards and their hit targets live inside it. */
@@ -204,40 +220,119 @@ export interface PhoneRegions {
   actionTop: number;
   /** Width of one of your cards for a hand spanning `cols` columns. */
   handCardW(cols: number): number;
+  /** Width of the drawn card under the piles. */
+  drawnW: number;
 }
 
 export interface PhoneLayout extends TableLayout {
   regions: PhoneRegions;
 }
 
-/** Chips per strip row: up to 6, so 11 others take two rows. */
+/** Mini hands per strip row: up to 6, so 7 to 11 others take two rows. */
 export const STRIP_PER_ROW = 6;
-const STRIP_TOP = 8;
-const CHIP_H = 46;
-const CHIP_GAP = 6;
+/** Mini cards never shrink below this; a crowded strip takes another row instead. */
+export const MINI_MIN = 18;
+/** Mini cards never grow past this, so your own hand stays the biggest thing on screen. */
+export const MINI_MAX = 34;
+const MAX_ROWS = 3;
+const STRIP_TOP = 6;
+const STRIP_SIDE = 8;
+const HAND_GAP = 6;
+const ROW_GAP = 4;
+/** Padding inside a mini hand's box, room for the turn ring. */
+export const MINI_PAD = 3;
+/** The name line above a mini hand's cards. */
+export const NAME_H = 16;
 const BANNER_H = 34;
 /** Room the action bar keeps at the bottom: a 56 px primary button, a 48 px row, gaps. */
 export const ACTION_H = 150;
 const SIDE = 16;
 
+const miniGap = (w: number) => Math.max(2, w * 0.08);
+/** Width of a mini hand's box for `cols` columns of cards `w` wide. */
+const miniBoxW = (cols: number, w: number) => cols * w + (cols - 1) * miniGap(w) + 2 * MINI_PAD;
+
+/** Splits `others` into `rows` rows, as even as possible, longer rows first. */
+function splitRows<T>(others: readonly T[], rows: number): T[][] {
+  const out: T[][] = [];
+  const per = Math.ceil(others.length / rows);
+  for (let i = 0; i < others.length; i += per) out.push(others.slice(i, i + per));
+  return out;
+}
+
+/** Width a row of mini hands spans, gutters included, with cards `w` wide. */
+const rowW = (row: readonly string[], w: number, cols: (id: string) => number) =>
+  row.reduce((n, id) => n + miniBoxW(cols(id), w), 0) +
+  (row.length - 1) * HAND_GAP +
+  2 * STRIP_SIDE;
+
+/** Share of the screen height the strip may take before mini cards shrink to protect your hand. */
+const STRIP_SHARE = 0.3;
+
 /**
- * A phone in portrait, one-handed: the other players as a strip of chips along the top, the
- * deck and discard in the middle with your drawn card under them, your hand big above the
- * action bar. Other players' cards rest tucked under their chip, so cards still visibly fly to
- * and from them. Your cards shrink as penalty columns widen the hand, and grow back as it narrows.
+ * The biggest mini card width, in quarter px, at which every row fits across the screen and
+ * the strip stays within its share of the height. Never below `MINI_MIN` for height alone.
+ */
+function fitMini(
+  width: number,
+  height: number,
+  rows: string[][],
+  cols: (id: string) => number,
+): number {
+  const perRow = (height * STRIP_SHARE - STRIP_TOP) / Math.max(rows.length, 1);
+  const tall = (perRow - NAME_H - MINI_PAD - ROW_GAP) / (2 * CARD_RATIO + 0.08);
+  let w = Math.min(MINI_MAX, Math.max(MINI_MIN, Math.floor(tall * 4) / 4));
+  while (w > 1 && rows.some((row) => rowW(row, w, cols) > width)) w -= 0.25;
+  return w;
+}
+
+/**
+ * A phone in portrait, one-handed: the other players as mini hands along the top, each card
+ * face down on its stable grid position with holes kept open; the deck and discard in the
+ * middle with your drawn card under them; your hand big above the action bar. Every mini card
+ * is one size; a hand that grows a penalty column takes a wider share of its row instead of
+ * shrinking. Up to 6 others fit one row, 7 to 11 take two, and a third row only appears if
+ * penalty columns would push the cards under `MINI_MIN`.
+ *
+ * `cols` gives each hand's current column count (from the scene); missing hands count as 2.
  */
 export function phoneLayout(
   width: number,
   height: number,
   playerIds: readonly string[],
   youId: string,
+  cols: Readonly<Record<string, number>> = {},
 ): PhoneLayout {
   const others = playerIds.filter((id) => id !== youId);
-  const perRow = Math.min(Math.max(others.length, 1), STRIP_PER_ROW);
-  const rows = Math.ceil(others.length / perRow);
-  const cellW = (width - SIDE) / perRow;
-  const chipW = Math.min(cellW - CHIP_GAP, 120);
-  const stripBottom = STRIP_TOP + rows * (CHIP_H + CHIP_GAP);
+  const colsOf = (id: string) => Math.max(2, cols[id] ?? 2);
+
+  let nRows = Math.max(1, Math.ceil(others.length / STRIP_PER_ROW));
+  let rows = splitRows(others, nRows);
+  let miniW = fitMini(width, height, rows, colsOf);
+  while (miniW < MINI_MIN && nRows < Math.min(MAX_ROWS, others.length)) {
+    nRows += 1;
+    rows = splitRows(others, nRows);
+    miniW = fitMini(width, height, rows, colsOf);
+  }
+  if (!others.length) rows = [];
+  const miniH = miniW * CARD_RATIO;
+  const mGap = miniGap(miniW);
+  const boxH = NAME_H + 2 * miniH + mGap + MINI_PAD;
+
+  const hands: MiniHandBox[] = [];
+  rows.forEach((row, r) => {
+    const total =
+      row.reduce((n, id) => n + miniBoxW(colsOf(id), miniW), 0) + (row.length - 1) * HAND_GAP;
+    // Each row is centered, so a short last row sits in the middle.
+    let x = (width - total) / 2;
+    const y = STRIP_TOP + r * (boxH + ROW_GAP);
+    for (const id of row) {
+      const w = miniBoxW(colsOf(id), miniW);
+      hands.push({ playerId: id, x, y, w, h: boxH, cardsTop: y + NAME_H, row: r });
+      x += w + HAND_GAP;
+    }
+  });
+  const stripBottom = rows.length ? STRIP_TOP + rows.length * (boxH + ROW_GAP) : STRIP_TOP;
   const bannerY = stripBottom + BANNER_H / 2;
 
   const actionTop = height - ACTION_H;
@@ -247,8 +342,8 @@ export function phoneLayout(
   const handTop = handBottom - handBoxH;
   const gapFor = (w: number) => Math.max(6, w * 0.08);
   const maxHandW = Math.min(width * 0.27, (handBoxH - 12) / 2 / CARD_RATIO);
-  const handCardW = (cols: number) => {
-    const fit = (width - 2 * SIDE) / (cols + (cols - 1) * 0.08);
+  const handCardW = (c: number) => {
+    const fit = (width - 2 * SIDE) / (c + (c - 1) * 0.08);
     return Math.min(maxHandW, fit);
   };
   const handCy = (handTop + handBottom) / 2;
@@ -264,8 +359,8 @@ export function phoneLayout(
     pileY + pileH / 2 + 12 + (drawnW * CARD_RATIO) / 2,
   );
   const sprite = Math.round(Math.max(maxHandW, pileW));
-  const miniW = 9;
 
+  const handOf = (id: string) => hands.find((h) => h.playerId === id);
   const seats: SeatAnchor[] = playerIds.map((playerId) => {
     if (playerId === youId) {
       return {
@@ -277,14 +372,10 @@ export function phoneLayout(
         cardWidth: maxHandW,
       };
     }
-    const i = others.indexOf(playerId);
-    const row = Math.floor(i / perRow);
-    const inRow = Math.min(perRow, others.length - row * perRow);
-    // A short last row is centered rather than left-aligned.
-    const offset = ((perRow - inRow) * cellW) / 2;
-    const x = SIDE / 2 + offset + cellW * ((i % perRow) + 0.5);
-    const y = STRIP_TOP + row * (CHIP_H + CHIP_GAP) + CHIP_H / 2;
-    return { playerId, x, y, labelX: x, labelY: y, cardWidth: chipW };
+    const b = handOf(playerId);
+    const x = b ? b.x + b.w / 2 : width / 2;
+    const y = b ? b.cardsTop + miniH + mGap / 2 : STRIP_TOP;
+    return { playerId, x, y, labelX: x, labelY: b ? b.y + NAME_H / 2 : y, cardWidth: miniW };
   });
   const seatOf = (id: string) => seats.find((s) => s.playerId === id);
 
@@ -296,37 +387,43 @@ export function phoneLayout(
     discard: { x: width / 2 + pileW * 0.62, y: pileY, scale: pileW / sprite, rotate: 0 },
     seats,
     regions: {
-      strip: { bottom: stripBottom, chipW, chipH: CHIP_H },
+      strip: { bottom: stripBottom, rows: rows.length, miniW, hands },
       bannerY,
       hand: { top: handTop, bottom: handBottom },
       actionTop,
       handCardW,
+      drawnW,
     },
-    slot(playerId, pos, cols) {
+    slot(playerId, pos, c) {
       const seat = seatOf(playerId);
       if (!seat) return { x: width / 2, y: pileY, scale: miniW / sprite, rotate: 0 };
       if (playerId === youId) {
-        const w = handCardW(cols);
-        return handPose(seat.x, seat.y, w, gapFor(w), pos, cols, sprite);
+        const w = handCardW(c);
+        return handPose(seat.x, seat.y, w, gapFor(w), pos, c, sprite);
       }
-      return handPose(seat.x, seat.y, miniW, 1, pos, cols, sprite);
+      return handPose(seat.x, seat.y, miniW, mGap, pos, c, sprite);
     },
     drawn(playerId) {
       if (playerId === youId) return { x: width / 2, y: drawnY, scale: drawnW / sprite, rotate: 0 };
-      const seat = seatOf(playerId);
+      const b = handOf(playerId);
+      const w = miniW * 1.25;
+      // Held just under their hand, lifted over its bottom edge: it reads as in their hand.
       return {
-        x: seat?.x ?? width / 2,
-        y: seat?.y ?? 0,
-        scale: (miniW * 1.4) / sprite,
-        rotate: -3,
+        x: b ? b.x + b.w / 2 : width / 2,
+        y: b ? b.y + b.h + w * CARD_RATIO * 0.1 : 0,
+        scale: w / sprite,
+        rotate: -4,
       };
     },
     peek(rest, peekerId) {
-      // Your own card rises a little; anything else is peeked in the picker, so it stays put.
-      if (peekerId === youId && rest.scale > (miniW * 2) / sprite) {
-        return { ...rest, y: rest.y - rest.scale * sprite * 0.12, scale: rest.scale * 1.06 };
+      const target = rest.scale * sprite;
+      // You peeking at your own card: it rises a little, the face is for you.
+      if (peekerId === youId && target > miniW * 2) {
+        return { ...rest, y: rest.y - target * 0.12, scale: rest.scale * 1.06 };
       }
-      return rest;
+      // Anything else lifts and tilts toward whoever is looking, big enough to see at a glance.
+      const p = peekToward(rest, seatOf(peekerId), target * CARD_RATIO * 0.35);
+      return { ...p, scale: rest.scale * (target > miniW * 2 ? 1.12 : 1.4) };
     },
   };
 }

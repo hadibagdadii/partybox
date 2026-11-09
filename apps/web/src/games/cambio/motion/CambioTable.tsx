@@ -4,7 +4,7 @@ import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'reac
 import { colors, ease, fonts } from '../tokens';
 import { CardLayer, type Perspective } from './CardLayer';
 import { Felt } from './Felt';
-import { phoneLayout, tableLayout, type TableLayout } from './layout';
+import { handCols, phoneLayout, tableLayout, type TableLayout } from './layout';
 import { DeckStack, DiscardBase, ImpactRing, SweepGhosts } from './Piles';
 import type { MotionFrame } from './useCambioMotion';
 
@@ -107,8 +107,12 @@ export function CambioTable({
   const layout = useMemo(() => {
     if (given !== undefined) return given;
     if (!size || size.w === 0) return null;
-    return phoneOf ? phoneLayout(size.w, size.h, ids, phoneOf) : tableLayout(size.w, size.h, ids);
-  }, [given, size, ids, phoneOf]);
+    if (!phoneOf) return tableLayout(size.w, size.h, ids);
+    const cols = Object.fromEntries(
+      frame.scene.seats.map((s) => [s.playerId, handCols(s.slots.map((x) => x.pos))]),
+    );
+    return phoneLayout(size.w, size.h, ids, phoneOf, cols);
+  }, [given, size, ids, phoneOf, frame.scene]);
   const { scene, playing, timeScale } = frame;
 
   return (

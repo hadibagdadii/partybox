@@ -5,7 +5,7 @@ import { buzz, useTurnBuzz } from '../../../lib/vibrate';
 import type { PlayerScreenProps } from '../../registry';
 import type { Perspective } from '../motion/CardLayer';
 import { CambioTable, useSize } from '../motion/CambioTable';
-import { phoneLayout } from '../motion/layout';
+import { handCols, phoneLayout } from '../motion/layout';
 import { useCambioMotion } from '../motion/useCambioMotion';
 import { CambioBanner, Hint, SnapNotice, type Notice, type NoticeInput } from './Callouts';
 import { HandHits } from './HandHits';
@@ -17,7 +17,8 @@ import {
   turnsLeft,
   type SnapAction,
 } from './intents';
-import { PlayerStrip } from './PlayerStrip';
+import { MiniHands } from './MiniHands';
+import { PeekMarker } from './PeekMarker';
 import { RoundEnd } from './RoundEnd';
 import { TargetPicker } from './TargetPicker';
 import { Btn } from './ui';
@@ -26,6 +27,13 @@ import { Btn } from './ui';
 export const PEEK_SHOW_MS = 3000;
 const NOTICE_MS = { wrong: 2400, tooLate: 1200 } as const;
 const EMPTY: Record<string, Face> = {};
+
+/** Dev only: `?slowmo=4` plays the table four times slower, for checking motion by eye. */
+const DEV_MOTION = (() => {
+  if (!import.meta.env.DEV || typeof location === 'undefined') return {};
+  const n = Number(new URLSearchParams(location.search).get('slowmo'));
+  return Number.isFinite(n) && n >= 1 && n <= 10 ? { timeScale: n } : {};
+})();
 
 interface PickerSpec {
   title: string;
@@ -44,13 +52,19 @@ interface PickerSpec {
 export function CambioPhone({ you: seat, game, act, reset, playAgain }: PlayerScreenProps) {
   const view = game as CambioPlayerView;
   const me = view.you?.id ?? null;
-  const frame = useCambioMotion(view);
+  const frame = useCambioMotion(view, DEV_MOTION);
   const { ref, size } = useSize();
   const ids = useMemo(() => view.players.map((p) => p.id), [view.players]);
-  const layout = useMemo(
-    () => (size && size.w > 0 && me ? phoneLayout(size.w, size.h, ids, me) : null),
-    [size, ids, me],
+  // Each hand's grid width, from what the screen shows now; the layout only rebuilds when a
+  // hand gains or loses a column.
+  const colsKey = JSON.stringify(
+    frame.scene.seats.map((s) => [s.playerId, handCols(s.slots.map((x) => x.pos))]),
   );
+  const layout = useMemo(() => {
+    if (!size || size.w === 0 || !me) return null;
+    const cols = Object.fromEntries(JSON.parse(colsKey) as [string, number][]);
+    return phoneLayout(size.w, size.h, ids, me, cols);
+  }, [size, ids, me, colsKey]);
   const intents = useMemo(() => intentsOf(view), [view]);
   const nameOf = (id: string) => view.players.find((p) => p.id === id)?.name ?? id;
 
@@ -491,7 +505,8 @@ export function CambioPhone({ you: seat, game, act, reset, playAgain }: PlayerSc
       />
       {layout && (
         <>
-          <PlayerStrip view={view} layout={layout} />
+          <MiniHands view={view} layout={layout} frame={frame} />
+          <PeekMarker view={view} layout={layout} frame={frame} />
           <CambioBanner
             layout={layout}
             text={bannerText}

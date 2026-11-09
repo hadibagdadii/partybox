@@ -108,6 +108,24 @@ function describe(event: CambioEvent, name: NameOf): string {
   return write(event, name);
 }
 
+const roundWinner = (names: string[]) =>
+  `${list(names)} ${names.length === 1 ? 'wins' : 'win'} the round.`;
+const gameWinner = (names: string[]) =>
+  `${list(names)} ${names.length === 1 ? 'wins' : 'win'} the game.`;
+const YOU = 'You';
+const YOU_WIN = 'You win!';
+const YOU_WIN_ROUND = 'You win the round!';
+
+/**
+ * The winner line on a player's phone. Never pass "You" as a name to the plain templates
+ * ("You wins"): pass the other winners here with `youWon`, and you come first in the list.
+ */
+function winnerLine(kind: 'round' | 'game', others: string[], youWon: boolean): string {
+  if (youWon && others.length === 0) return kind === 'game' ? YOU_WIN : YOU_WIN_ROUND;
+  const names = youWon ? [YOU, ...others] : others;
+  return kind === 'game' ? gameWinner(names) : roundWinner(names);
+}
+
 const errors = {
   gameOver: 'The game is over.',
   notSeated: 'You are not in this game.',
@@ -179,7 +197,7 @@ export const theme = {
   errors,
   /** Words on the player's phone. */
   phone: {
-    you: 'You',
+    you: YOU,
     yourHand: 'Your cards',
     yourCard: (n: number) => `Your card ${n}`,
     theirCard: (name: string, n: number) => `${name}'s card ${n}`,
@@ -219,12 +237,19 @@ export const theme = {
     playAgain: 'Play again',
     backToLobby: 'Back to lobby',
     caller: 'Called',
+    /** Under a card someone else is peeking at; never shown for your own peeks. */
+    peekedBy: (name: string) => `${name} looked at this`,
+    /** A mini hand, for screen readers. Only for other players. */
+    miniHand: (name: string, cards: number, theirTurn: boolean) =>
+      `${name}, ${cards} ${cards === 1 ? 'card' : 'cards'}${theirTurn ? ', their turn' : ''}`,
   },
   results: {
-    roundWinner: (names: string[]) =>
-      `${list(names)} ${names.length === 1 ? 'wins' : 'win'} the round.`,
-    gameWinner: (names: string[]) =>
-      `${list(names)} ${names.length === 1 ? 'wins' : 'win'} the game.`,
+    /** For the TV and logs, with real names. Phones use `winnerLine`. */
+    roundWinner,
+    gameWinner,
+    youWin: YOU_WIN,
+    youWinRound: YOU_WIN_ROUND,
+    winnerLine,
     score: (points: number) => `${points} ${Math.abs(points) === 1 ? 'point' : 'points'}`,
   },
 };
