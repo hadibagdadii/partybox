@@ -41,4 +41,5 @@ Diwan adapts Secret Hitler (Max Temkin, Mike Boxleiter, Tommy Maranges, Mackenzi
 - Plan before coding; list files you'll touch.
 - Write or update tests with every engine change. Run `pnpm test` and `pnpm typecheck` before saying a task is done.
 - Small commits with clear messages.
+- Any dependency change (adding, removing, or editing a version range in any package.json) must commit the regenerated pnpm-lock.yaml in the same commit. Never hand-edit a version range without re-running `pnpm install`. Before pushing, run `pnpm verify:lockfile` and `docker build .`; Render installs with `--frozen-lockfile` and fails on any mismatch.
 - Phones are the primary player device: design player UI mobile-first, large tap targets, works in portrait.

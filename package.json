@@ -16,7 +16,8 @@
     "test:full": "PROPERTY_RUNS=1000 vitest run",
     "typecheck": "tsc -b",
     "lint": "eslint . && prettier --check .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "verify:lockfile": "pnpm install --frozen-lockfile --lockfile-only --ignore-scripts"
   },
   "devDependencies": {
     "@eslint/js": "^9.15.0",
